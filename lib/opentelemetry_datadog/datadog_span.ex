@@ -8,6 +8,7 @@ defmodule OpentelemetryDatadog.DatadogSpan do
     :name,
     :start,
     :duration,
+    # 0 if no error, 1 if error
     :error,
     :resource,
     :service,

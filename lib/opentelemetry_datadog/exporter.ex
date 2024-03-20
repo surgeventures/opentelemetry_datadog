@@ -1,4 +1,5 @@
 defmodule OpentelemetryDatadog.Exporter do
+  require OpentelemetryDatadog.Exporter
   @behaviour :otel_exporter
 
   require Record
@@ -6,6 +7,11 @@ defmodule OpentelemetryDatadog.Exporter do
   Record.defrecord(
     :span,
     Record.extract(:span, from: "#{@deps_dir}/opentelemetry/include/otel_span.hrl")
+  )
+
+  Record.defrecord(
+    :resource,
+    Record.extract(:resource, from: "#{@deps_dir}/opentelemetry/src/otel_resource.erl")
   )
 
   Record.defrecord(
@@ -35,6 +41,7 @@ defmodule OpentelemetryDatadog.Exporter do
   alias OpentelemetryDatadog.Mapper
   @mappers [
     {Mapper.LiftError, []},
+    {Mapper.InferDatadogFields, []},
     {Mapper.AlwaysSample, []},
   ]
 
@@ -43,8 +50,6 @@ defmodule OpentelemetryDatadog.Exporter do
     state = %State{
       host: Keyword.fetch!(config, :host),
       port: Keyword.fetch!(config, :port),
-      service_name: Keyword.fetch!(config, :service_name),
-      # http: HTTPoison,
       container_id: get_container_id()
     }
 
@@ -53,14 +58,19 @@ defmodule OpentelemetryDatadog.Exporter do
 
   @impl true
   def export(:traces, tid, resource, %{container_id: container_id} = state) do
-    IO.inspect({:traces_resource, resource})
+    resource = resource(resource)
+    resource_attrs = attributes(Keyword.fetch!(resource, :attributes))
+
+    data = %{
+      resource: resource,
+      resource_attrs: resource_attrs,
+      resource_map: Keyword.fetch!(resource_attrs, :map)
+    }
 
     formatted =
       :ets.foldl(
         fn span, acc ->
-          # IO.inspect(span(span))
-          # IO.inspect(format_span(span, state))
-          [format_span(span, state) | acc]
+          [format_span(span, data, state) | acc]
         end,
         [],
         tid
@@ -74,8 +84,6 @@ defmodule OpentelemetryDatadog.Exporter do
       formatted
       |> encode()
       |> push(headers, state)
-
-    # IO.inspect({:trace_response, response})
 
     case response do
       {:ok, %{status: 200} = resp} ->
@@ -121,120 +129,77 @@ defmodule OpentelemetryDatadog.Exporter do
     trunc(Integer.pow(2, attempt) * 500 * (1 - 0.1 * :rand.uniform()))
   end
 
-  def format_span(span_record, %{service_name: service_name}) do
+  def format_span(span_record, data, %{}) do
     span = span(span_record)
     attributes = attributes(Keyword.fetch!(span, :attributes))
 
-    events = :otel_events.list(Keyword.fetch!(span, :events))
+    state =
+      %{
+        events: :otel_events.list(Keyword.fetch!(span, :events)),
+      }
+      |> Map.merge(data)
 
-    if events != [] do
-      IO.inspect({:events, events})
-    end
+    #if events != [] do
+    #  IO.inspect({:events, events})
+    #end
 
     dd_span_kind = Atom.to_string(Keyword.fetch!(span, :kind))
 
     start_time_nanos = :opentelemetry.timestamp_to_nano(Keyword.fetch!(span, :start_time))
     end_time_nanos = :opentelemetry.timestamp_to_nano(Keyword.fetch!(span, :end_time))
 
-    {error_code, error_meta} =
-      case Keyword.fetch!(span, :status) do
-        :undefined ->
-          {0, %{}}
-
-        {:status, :unset, _} ->
-          {0, %{}}
-
-        {:status, :ok, _} ->
-          {0, %{}}
-
-        {:status, :error, msg} ->
-          error_event =
-            events
-            |> Enum.reverse()
-            |> Enum.find(fn
-              {:event, _time, "exception", _attrs} -> true
-              _ -> false
-            end)
-
-          case error_event do
-            nil ->
-              {1, %{"error.message" => msg}}
-
-            {:event, _time, "exception", attrs} ->
-              attrs = Keyword.fetch!(attributes(attrs), :map)
-              {1, attrs}
-          end
-      end
-
     meta =
       Keyword.fetch!(attributes, :map)
-      |> Map.put("span.kind", dd_span_kind)
-      |> Map.merge(error_meta)
+      |> Map.put(:"span.kind", dd_span_kind)
       |> Enum.map(fn
         {k, v} -> {k, term_to_string(v)}
       end)
       |> Enum.into(%{})
-      |> fix_error_keys()
-      |> Map.put("manual.keep", "1")
-      |> Map.put("env", "hans-local-testing")
-
-    {:instrumentation_scope, scope_name, _version, _opts} =
-      Keyword.fetch!(span, :instrumentation_scope)
+      #|> Map.put(:"manual.keep", "1")
+      |> Map.put(:env, "hans-local-testing")
 
     name = Keyword.fetch!(span, :name)
-    resource = get_resource(scope_name, meta) || name
-
-    type = get_type(scope_name, meta)
-
-    meta =
-      meta
-      |> Map.put("evaled.name", name)
-      |> Map.put("evaled.resource", resource)
-      |> Map.put("evaled.type", type)
-      |> Map.put("evaled.service", get_service_name(service_name, meta))
 
     # Service, Operation, Resource
 
-    IO.inspect(meta)
+    dd_span = %OpentelemetryDatadog.DatadogSpan{
+      trace_id: id_to_datadog_id(Keyword.fetch!(span, :trace_id)),
+      span_id: Keyword.fetch!(span, :span_id),
+      parent_id: nil_if_undefined(Keyword.fetch!(span, :parent_span_id)),
+      name: name,
+      start: start_time_nanos,
+      duration: end_time_nanos - start_time_nanos,
+      # TODO https://github.com/spandex-project/spandex_datadog/blob/master/lib/spandex_datadog/api_server.ex#L215C15-L215C15
+      meta: meta
+      # metrics: %{}
+    }
+
+    span = apply_mappers(dd_span, span, state)
+
+    IO.inspect(span.meta)
 
     # TODO group by trace_id
-    [
-      %{
-        trace_id: id_to_datadog_id(Keyword.fetch!(span, :trace_id)),
-        span_id: Keyword.fetch!(span, :span_id),
-        name: name,
-        start: start_time_nanos,
-        duration: end_time_nanos - start_time_nanos,
-        parent_id: nil_if_undefined(Keyword.fetch!(span, :parent_span_id)),
-        # TODO set to 1 if error
-        error: error_code,
-        # TODO likely not right
-        resource: resource,
-        # TODO from traces_resource
-        service: get_service_name(service_name, meta),
-        # TODO map according to https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/712278378b0e3d04cd6881c020b266b9fea56113/receiver/datadogreceiver/translator.go#L113
-        # (in reverse)
-        type: type,
-        # TODO https://github.com/spandex-project/spandex_datadog/blob/master/lib/spandex_datadog/api_server.ex#L215C15-L215C15
-        meta: meta
-        # metrics: %{}
-      }
-    ]
+    case span do
+      nil -> []
+      span ->
+        span = Map.delete(span, :__struct__)
+        [span]
+    end
   end
+
+  def apply_mappers(span, otel_span, state) do
+    apply_mappers(@mappers, span, otel_span, state)
+  end
+  def apply_mappers([{mapper, mapper_arg} | rest], span, otel_span, state) do
+    case mapper.map(span, otel_span, mapper_arg, state) do
+      {:next, span} -> apply_mappers(rest, span, otel_span, state)
+      nil -> nil
+    end
+  end
+  def apply_mappers([], span, _, _), do: span
 
   def nil_if_undefined(:undefined), do: nil
   def nil_if_undefined(value), do: value
-
-  def fix_error_keys(map) do
-    map
-    |> Enum.map(fn
-      {:"exception.message", v} -> {:"error.message", v}
-      {:"exception.stacktrace", v} -> {:"error.stack", v}
-      {:"exception.type", v} -> {:"error.type", v}
-      kv -> kv
-    end)
-    |> Enum.into(%{})
-  end
 
   @cgroup_uuid "[0-9a-f]{8}[-_][0-9a-f]{4}[-_][0-9a-f]{4}[-_][0-9a-f]{4}[-_][0-9a-f]{12}"
   @cgroup_ctnr "[0-9a-f]{64}"
@@ -286,20 +251,5 @@ defmodule OpentelemetryDatadog.Exporter do
   defp term_to_string(term) when is_binary(term), do: term
   defp term_to_string(term) when is_atom(term), do: term
   defp term_to_string(term), do: inspect(term)
-
-  def get_resource("opentelemetry_cowboy", %{:"http.target" => target}), do: target
-  def get_resource("opentelemetry_ecto", %{:"db.statement" => statement}), do: statement
-  def get_resource(_, _), do: nil
-
-  def get_type("opentelemetry_ecto", _meta), do: "db"
-  def get_type("opentelemetry_liveview", _meta), do: "web"
-  def get_type("opentelemetry_phoenix", _meta), do: "web"
-  def get_type(_, _), do: "custom"
-
-  def get_service_name(_, %{"db.url": url, "db.instance": name}) do
-    %URI{host: host} = URI.parse(url)
-    "#{host}/#{name}"
-  end
-  def get_service_name(service_name, _), do: service_name
 
 end
