@@ -41,8 +41,8 @@ defmodule OpentelemetryDatadog.Exporter do
   alias OpentelemetryDatadog.Mapper
   @mappers [
     {Mapper.LiftError, []},
-    {Mapper.InferDatadogFields, []},
-    {Mapper.AlwaysSample, []},
+    {Mapper.InferDatadogFields, []}
+    #{Mapper.AlwaysSample, []},
   ]
 
   @impl true
@@ -170,13 +170,11 @@ defmodule OpentelemetryDatadog.Exporter do
       start: start_time_nanos,
       duration: end_time_nanos - start_time_nanos,
       # TODO https://github.com/spandex-project/spandex_datadog/blob/master/lib/spandex_datadog/api_server.ex#L215C15-L215C15
-      meta: meta
-      # metrics: %{}
+      meta: meta,
+      metrics: %{}
     }
 
     span = apply_mappers(dd_span, span, state)
-
-    IO.inspect(span.meta)
 
     # TODO group by trace_id
     case span do

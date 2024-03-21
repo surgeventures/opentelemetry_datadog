@@ -21,6 +21,7 @@ defmodule OpentelemetryDatadog.Mapper.InferDatadogFields do
       # (in reverse)
       type: type,
       service: service_name,
+      metrics: add_priority_metric(meta, span.metrics)
     }
 
     span = %{
@@ -30,10 +31,18 @@ defmodule OpentelemetryDatadog.Mapper.InferDatadogFields do
         |> Map.put(:"evaled.resource", resource)
         |> Map.put(:"evaled.type", type)
         |> Map.put(:"evaled.service", service_name)
-        |> Map.put(:"evaled.name", name)
+        |> Map.put(:"evaled.name", name),
     }
 
     {:next, span}
+  end
+
+  #def add_priority_metric(%{_sampling_priority_v1: priority}, metrics) do
+  #  Map.put(metrics, :_sampling_priority_v1, priority)
+  #end
+
+  def add_priority_metric(_meta, metrics) do
+    metrics
   end
 
   def get_resource(_, %{:"http.target" => target}), do: target
