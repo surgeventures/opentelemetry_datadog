@@ -1,5 +1,4 @@
 defmodule OpentelemetryDatadog.Exporter do
-  require OpentelemetryDatadog.Exporter
   @behaviour :otel_exporter
 
   require Record
@@ -39,10 +38,11 @@ defmodule OpentelemetryDatadog.Exporter do
   ]
 
   alias OpentelemetryDatadog.Mapper
+
   @mappers [
     {Mapper.LiftError, []},
     {Mapper.InferDatadogFields, []}
-    #{Mapper.AlwaysSample, []},
+    # {Mapper.AlwaysSample, []},
   ]
 
   @impl true
@@ -135,13 +135,13 @@ defmodule OpentelemetryDatadog.Exporter do
 
     state =
       %{
-        events: :otel_events.list(Keyword.fetch!(span, :events)),
+        events: :otel_events.list(Keyword.fetch!(span, :events))
       }
       |> Map.merge(data)
 
-    #if events != [] do
+    # if events != [] do
     #  IO.inspect({:events, events})
-    #end
+    # end
 
     dd_span_kind = Atom.to_string(Keyword.fetch!(span, :kind))
 
@@ -155,7 +155,7 @@ defmodule OpentelemetryDatadog.Exporter do
         {k, v} -> {k, term_to_string(v)}
       end)
       |> Enum.into(%{})
-      #|> Map.put(:"manual.keep", "1")
+      # |> Map.put(:"manual.keep", "1")
       |> Map.put(:env, "hans-local-testing")
 
     name = Keyword.fetch!(span, :name)
@@ -178,7 +178,9 @@ defmodule OpentelemetryDatadog.Exporter do
 
     # TODO group by trace_id
     case span do
-      nil -> []
+      nil ->
+        []
+
       span ->
         span = Map.delete(span, :__struct__)
         [span]
@@ -188,12 +190,14 @@ defmodule OpentelemetryDatadog.Exporter do
   def apply_mappers(span, otel_span, state) do
     apply_mappers(@mappers, span, otel_span, state)
   end
+
   def apply_mappers([{mapper, mapper_arg} | rest], span, otel_span, state) do
     case mapper.map(span, otel_span, mapper_arg, state) do
       {:next, span} -> apply_mappers(rest, span, otel_span, state)
       nil -> nil
     end
   end
+
   def apply_mappers([], span, _, _), do: span
 
   def nil_if_undefined(:undefined), do: nil
@@ -249,5 +253,4 @@ defmodule OpentelemetryDatadog.Exporter do
   defp term_to_string(term) when is_binary(term), do: term
   defp term_to_string(term) when is_atom(term), do: term
   defp term_to_string(term), do: inspect(term)
-
 end
