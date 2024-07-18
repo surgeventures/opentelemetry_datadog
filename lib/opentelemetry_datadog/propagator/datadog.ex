@@ -23,22 +23,20 @@ defmodule OpentelemetryDatadog.Propagator.Datadog do
   end
 
   @impl true
+
   def inject(ctx, carrier, carrier_set, _propagator_options) do
     span_ctx = :otel_tracer.current_span_ctx(ctx)
 
-    trace_id = span_ctx(span_ctx, :trace_id)
-    span_id = span_ctx(span_ctx, :span_id)
-    trace_flags = span_ctx(span_ctx, :trace_flags)
+    case span_ctx do
+      span_ctx(trace_id: trace_id, span_id: span_id, trace_flags: trace_flags) when trace_id != 0 and span_id != 0 and trace_flags in [0, 1] ->
+        carrier = carrier_set.(@trace_id_header, Integer.to_string(trace_id), carrier)
+        carrier = carrier_set.(@parent_id_header, Integer.to_string(span_id), carrier)
+        carrier = carrier_set.(@sampling_priority_header, Integer.to_string(trace_flags), carrier)
+        carrier
 
-    if trace_id != 0 and span_id != 0 and trace_flags in [0, 1] do
-      carrier
-      |> carrier_set.(@trace_id_header, Integer.to_string(trace_id))
-      |> carrier_set.(@parent_id_header, Integer.to_string(span_id))
-      |> carrier_set.(@sampling_priority_header, Integer.to_string(trace_flags))
-    else
-      carrier
+      _ ->
+        carrier
     end
-
   end
 
   @impl true

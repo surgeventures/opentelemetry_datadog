@@ -1,5 +1,4 @@
 defmodule OpentelemetryDatadog.Exporter do
-  require OpentelemetryDatadog.Exporter
   @behaviour :otel_exporter
 
   require Record
