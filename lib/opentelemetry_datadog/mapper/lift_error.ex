@@ -3,6 +3,11 @@ defmodule OpentelemetryDatadog.Mapper.LiftError do
   @behaviour OpentelemetryDatadog.Mapper
 
   @impl true
+  def init(state) do
+    state
+  end
+
+  @impl true
   def map(span, otel_span, _arg, _state) do
     events = :otel_events.list(Keyword.fetch!(otel_span, :events))
 

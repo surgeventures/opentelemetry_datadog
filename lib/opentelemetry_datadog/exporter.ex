@@ -49,7 +49,7 @@ defmodule OpentelemetryDatadog.Exporter do
     state = %State{
       host: Keyword.fetch!(config, :host),
       port: Keyword.fetch!(config, :port),
-      container_id: get_container_id()
+      container_id: OpentelemetryDatadog.Util.get_container_id()
     }
 
     {:ok, state}
@@ -75,14 +75,18 @@ defmodule OpentelemetryDatadog.Exporter do
         tid
       )
 
-    count = Enum.count(formatted)
-    headers = @headers ++ [{"X-Datadog-Trace-Count", count}]
-    headers = headers ++ List.wrap(if container_id, do: {"Datadog-Container-ID", container_id})
+    headers =
+      [
+        (if container_id, do: {"Datadog-Container-ID", container_id}),
+        {"X-Datadog-Trace-Count", Enum.count(formatted)}
+        | @headers
+      ]
+      |> Enum.filter(& &1 != nil)
 
     response =
       formatted
-      |> encode()
-      |> push(headers, state)
+      |> encode_traces()
+      |> put_traces(headers, state)
 
     case response do
       {:ok, %{status: 200} = resp} ->
@@ -106,13 +110,13 @@ defmodule OpentelemetryDatadog.Exporter do
     :ok
   end
 
-  defp encode(data) do
+  defp encode_traces(data) do
     data
     |> deep_remove_nils()
     |> Msgpax.pack!(data)
   end
 
-  def push(body, headers, %State{host: host, port: port}) do
+  def put_traces(body, headers, %State{host: host, port: port}) do
     Req.put(
       "#{host}:#{port}/v0.4/traces",
       body: body,
@@ -154,8 +158,6 @@ defmodule OpentelemetryDatadog.Exporter do
         {k, v} -> {k, term_to_string(v)}
       end)
       |> Enum.into(%{})
-      #|> Map.put(:"manual.keep", "1")
-      |> Map.put(:env, "hans-local-testing")
 
     name = Keyword.fetch!(span, :name)
 
@@ -197,23 +199,6 @@ defmodule OpentelemetryDatadog.Exporter do
 
   def nil_if_undefined(:undefined), do: nil
   def nil_if_undefined(value), do: value
-
-  @cgroup_uuid "[0-9a-f]{8}[-_][0-9a-f]{4}[-_][0-9a-f]{4}[-_][0-9a-f]{4}[-_][0-9a-f]{12}"
-  @cgroup_ctnr "[0-9a-f]{64}"
-  @cgroup_task "[0-9a-f]{32}-\\d+"
-  @cgroup_regex Regex.compile!(
-                  ".*(#{@cgroup_uuid}|#{@cgroup_ctnr}|#{@cgroup_task})(?:\\.scope)?$",
-                  "m"
-                )
-
-  defp get_container_id() do
-    with {:ok, file_binary} <- File.read("/proc/self/cgroup"),
-         [_, container_id] <- Regex.run(@cgroup_regex, file_binary) do
-      container_id
-    else
-      _ -> nil
-    end
-  end
 
   @spec deep_remove_nils(term) :: term
   defp deep_remove_nils(term) when is_map(term) do

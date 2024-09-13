@@ -2,6 +2,11 @@ defmodule OpentelemetryDatadog.Mapper.InferDatadogFields do
   @behaviour OpentelemetryDatadog.Mapper
 
   @impl true
+  def init(state) do
+    state
+  end
+
+  @impl true
   def map(span, otel_span, _config, state) do
     meta = span.meta
 
