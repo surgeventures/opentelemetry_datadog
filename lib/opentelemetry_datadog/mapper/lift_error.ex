@@ -42,9 +42,9 @@ defmodule OpentelemetryDatadog.Mapper.LiftError do
       |> fix_error_keys()
 
     span = %{
-      span
-      | error: error_code,
-        meta: meta
+      span |
+      error: error_code,
+      meta: meta
     }
 
     {:next, span}
@@ -60,4 +60,5 @@ defmodule OpentelemetryDatadog.Mapper.LiftError do
     end)
     |> Enum.into(%{})
   end
+
 end
