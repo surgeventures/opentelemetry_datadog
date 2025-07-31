@@ -17,8 +17,8 @@ defmodule OpentelemetryDatadog.Propagator.Datadog do
     [
       @trace_id_header,
       @parent_id_header,
-      @sampling_priority_header,
-      #"x-datadog-origin"
+      @sampling_priority_header
+      # "x-datadog-origin"
     ]
   end
 
@@ -38,7 +38,6 @@ defmodule OpentelemetryDatadog.Propagator.Datadog do
     else
       carrier
     end
-
   end
 
   @impl true
@@ -62,6 +61,7 @@ defmodule OpentelemetryDatadog.Propagator.Datadog do
   end
 
   defp decode_integer_id(:undefined), do: :undefined
+
   defp decode_integer_id(bin) do
     case Integer.parse(bin) do
       {integer, _} -> integer
@@ -75,5 +75,4 @@ defmodule OpentelemetryDatadog.Propagator.Datadog do
   defp decode_sampling_priority("0"), do: 0
   defp decode_sampling_priority("1"), do: 1
   defp decode_sampling_priority("2"), do: 1
-
 end
