@@ -38,6 +38,7 @@ defmodule OpentelemetryDatadog.Exporter do
   ]
 
   alias OpentelemetryDatadog.Mapper
+  alias OpentelemetryDatadog.SpanUtils
 
   @mappers [
     {Mapper.LiftError, []},
@@ -50,7 +51,7 @@ defmodule OpentelemetryDatadog.Exporter do
     state = %State{
       host: Keyword.fetch!(config, :host),
       port: Keyword.fetch!(config, :port),
-      container_id: get_container_id()
+      container_id: SpanUtils.get_container_id()
     }
 
     {:ok, state}
@@ -152,7 +153,7 @@ defmodule OpentelemetryDatadog.Exporter do
       Keyword.fetch!(attributes, :map)
       |> Map.put(:"span.kind", dd_span_kind)
       |> Enum.map(fn
-        {k, v} -> {k, term_to_string(v)}
+        {k, v} -> {k, SpanUtils.term_to_string(v)}
       end)
       |> Enum.into(%{})
       # |> Map.put(:"manual.keep", "1")
@@ -163,9 +164,9 @@ defmodule OpentelemetryDatadog.Exporter do
     # Service, Operation, Resource
 
     dd_span = %OpentelemetryDatadog.DatadogSpan{
-      trace_id: id_to_datadog_id(Keyword.fetch!(span, :trace_id)),
+      trace_id: SpanUtils.id_to_datadog_id(Keyword.fetch!(span, :trace_id)),
       span_id: Keyword.fetch!(span, :span_id),
-      parent_id: nil_if_undefined(Keyword.fetch!(span, :parent_span_id)),
+      parent_id: SpanUtils.nil_if_undefined(Keyword.fetch!(span, :parent_span_id)),
       name: name,
       start: start_time_nanos,
       duration: end_time_nanos - start_time_nanos,
@@ -200,26 +201,6 @@ defmodule OpentelemetryDatadog.Exporter do
 
   def apply_mappers([], span, _, _), do: span
 
-  def nil_if_undefined(:undefined), do: nil
-  def nil_if_undefined(value), do: value
-
-  @cgroup_uuid "[0-9a-f]{8}[-_][0-9a-f]{4}[-_][0-9a-f]{4}[-_][0-9a-f]{4}[-_][0-9a-f]{12}"
-  @cgroup_ctnr "[0-9a-f]{64}"
-  @cgroup_task "[0-9a-f]{32}-\\d+"
-  @cgroup_regex Regex.compile!(
-                  ".*(#{@cgroup_uuid}|#{@cgroup_ctnr}|#{@cgroup_task})(?:\\.scope)?$",
-                  "m"
-                )
-
-  defp get_container_id() do
-    with {:ok, file_binary} <- File.read("/proc/self/cgroup"),
-         [_, container_id] <- Regex.run(@cgroup_regex, file_binary) do
-      container_id
-    else
-      _ -> nil
-    end
-  end
-
   @spec deep_remove_nils(term) :: term
   defp deep_remove_nils(term) when is_map(term) do
     term
@@ -239,18 +220,4 @@ defmodule OpentelemetryDatadog.Exporter do
   end
 
   defp deep_remove_nils(term), do: term
-
-  defp id_to_datadog_id(nil) do
-    nil
-  end
-
-  defp id_to_datadog_id(trace_id) do
-    <<_lower::integer-size(64), upper::integer-size(64)>> = <<trace_id::integer-size(128)>>
-    upper
-  end
-
-  defp term_to_string(term) when is_boolean(term), do: inspect(term)
-  defp term_to_string(term) when is_binary(term), do: term
-  defp term_to_string(term) when is_atom(term), do: term
-  defp term_to_string(term), do: inspect(term)
 end

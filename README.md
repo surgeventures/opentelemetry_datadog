@@ -1,7 +1,9 @@
 # OpentelemetryDatadog
 
 Datadog exporter for OpenTelemetry in Elixir.  
-Exports traces directly to the Datadog Agent using the native `/v0.5/traces` protocol over MessagePack.
+Exports traces directly to the Datadog Agent using the native Datadog protocol over MessagePack.
+
+Supports both `/v0.4/traces` (default) and `/v0.5/traces` endpoints.
 
 ## Why?
 
@@ -84,6 +86,8 @@ OpentelemetryDatadog.setup([
 
 Example configuration to wire the exporter into your OpenTelemetry setup:
 
+### Using v0.4 API (default)
+
 ```elixir
 config :opentelemetry,
   traces_exporter: {OpentelemetryDatadog.Exporter, []},
@@ -96,7 +100,47 @@ config :opentelemetry,
   }
 ```
 
-The above config will:
+### Using v0.5 API
+
+```elixir
+config :opentelemetry,
+  traces_exporter: {OpentelemetryDatadog.V05.Exporter, [protocol: :v05]},
+  sampler: {:otel_sampler_parent_based, %{root: {:otel_sampler_always_on, %{}}}},
+  text_map_propagators: [OpentelemetryDatadog.Propagator.Datadog],
+  resource: %{
+    "service.name": "my-app",
+    "deployment.environment": "production",
+    "service.version": "1.2.3"
+  }
+```
+
+The above configs will:
 * Send traces to a DataDog agent running on `localhost:8126`
 * Randomly sample traces at a rate of 0.5, while accurately reporting sampling rates to DataDog
 * Setup a propagator that is compatible with the "x-datadog-*" headers
+
+## v0.5 API Features
+
+The v0.5 exporter uses the `/v0.5/traces` endpoint and includes:
+
+- **Field validation**: Validates all mandatory fields before encoding
+- **MessagePack encoding**: Converts spans to binary MessagePack format
+- **Resource mapping**: Maps OpenTelemetry resources to Datadog span fields
+- **Type conversion**: Converts data types to match Datadog requirements
+
+### v0.5 Required Fields
+
+When using the v0.5 API, each span must include these mandatory fields:
+
+- `trace_id`: integer() - Unique trace identifier
+- `span_id`: integer() - Unique span identifier  
+- `parent_id`: integer() | nil - Parent span ID (nil for root spans)
+- `name`: string() - Operation name
+- `service`: string() - Service name
+- `resource`: string() - Resource being accessed
+- `type`: string() - Span type (web, db, cache, etc.)
+- `start`: integer() - Start time in nanoseconds
+- `duration`: integer() - Duration in nanoseconds
+- `error`: 0 | 1 - Error flag (0 = no error, 1 = error)
+- `meta`: %{string() => string()} - String metadata
+- `metrics`: %{string() => number()} - Numeric metrics
