@@ -1,7 +1,11 @@
-Code.require_file("support/env_helpers.ex", __DIR__)
-Code.require_file("support/config_presets.ex", __DIR__)
-Code.require_file("support/error_scenarios.ex", __DIR__)
-Code.require_file("support/test_fixtures.ex", __DIR__)
-Code.require_file("support/test_helpers.ex", __DIR__)
+[
+  "support/env_helpers.ex",
+  "support/config_presets.ex",
+  "support/error_scenarios.ex",
+  "support/test_fixtures.ex",
+  "support/test_helpers.ex",
+  "support/telemetry_handler.ex"
+]
+|> Enum.each(&Code.require_file(&1, __DIR__))
 
 ExUnit.start()

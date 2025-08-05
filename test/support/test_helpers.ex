@@ -1,43 +1,6 @@
 defmodule OpentelemetryDatadog.TestHelpers do
   @moduledoc """
-  Main entry point for all OpenTelemetry Datadog test utilities.
-
-  This module re-exports functions from specialized helper modules,
-  providing a single import point for all test utilities while
-  maintaining clean separation of concerns.
-
-  ## Usage
-
-  ### Using import (manual setup)
-
-      defmodule MyTest do
-        use ExUnit.Case
-        import OpentelemetryDatadog.TestHelpers
-        
-        setup do
-          reset_env()
-          :ok
-        end
-        
-        test "my test" do
-          dev_config("my-service")
-          # test logic
-        end
-      end
-      
-  ### Using `use` (automatic setup)
-
-      defmodule MyTest do
-        use ExUnit.Case
-        use OpentelemetryDatadog.TestHelpers
-        
-        test "my test" do
-          dev_config("my-service")
-          # test logic - environment is automatically reset
-        end
-      end
-
-  ## Specialized Modules
+  Test utilities for OpenTelemetry Datadog.
 
   - `EnvHelpers` - Environment variable management
   - `ConfigPresets` - Pre-configured scenarios  

@@ -1,10 +1,6 @@
 defmodule OpentelemetryDatadog.ConfigError do
   @moduledoc """
   Exception raised when configuration validation fails.
-
-  Fields:
-  * `:type` - reason for failure (`:missing_required_config` | `:invalid_config`)
-  * `:message` - human-readable explanation
   """
   defexception [:type, :message]
 
@@ -25,24 +21,6 @@ end
 defmodule OpentelemetryDatadog.Config do
   @moduledoc """
   Configuration management for OpenTelemetry Datadog integration.
-
-  Reads configuration from environment variables with fallback to default values.
-  Validates required configuration parameters.
-
-  ## Supported Environment Variables
-
-  - `DD_AGENT_HOST` - Datadog agent host (required)
-  - `DD_TRACE_AGENT_PORT` - Datadog trace agent port (default: 8126)
-  - `DD_SERVICE` - Service name
-  - `DD_VERSION` - Service version
-  - `DD_ENV` - Environment name
-  - `DD_TAGS` - Additional tags as comma-separated key:value pairs
-  - `DD_TRACE_SAMPLE_RATE` - Trace sampling rate (0.0 to 1.0)
-
-  ## Usage
-
-  Use `load/0` for safe configuration loading that returns `{:ok, config}` or `{:error, type, message}`.
-  Use `load!/0` for configuration loading that raises `ConfigError` on failure.
   """
 
   alias OpentelemetryDatadog.{ConfigError, DatadogConstants}
@@ -71,22 +49,7 @@ defmodule OpentelemetryDatadog.Config do
 
   @type validation_error :: {:error, :missing_required_config | :invalid_config, String.t()}
 
-  @doc """
-  Loads configuration from environment variables.
-
-  ## Examples
-
-      iex> System.put_env("DD_AGENT_HOST", "localhost")
-      iex> {:ok, config} = OpentelemetryDatadog.Config.load()
-      iex> config.host
-      "localhost"
-      iex> config.port
-      8126
-
-      iex> System.delete_env("DD_AGENT_HOST")
-      iex> OpentelemetryDatadog.Config.load()
-      {:error, :missing_required_config, "DD_AGENT_HOST is required"}
-  """
+  @doc "Loads configuration from environment variables."
   @spec load() :: {:ok, t()} | validation_error()
   def load do
     with {:ok, host} <- get_required_env("DD_AGENT_HOST"),
@@ -109,18 +72,7 @@ defmodule OpentelemetryDatadog.Config do
     end
   end
 
-  @doc """
-  Loads configuration from environment variables, raising an exception on failure.
-
-  ## Examples
-
-      iex> System.put_env("DD_AGENT_HOST", "localhost")
-      iex> config = OpentelemetryDatadog.Config.load!()
-      iex> config.host
-      "localhost"
-      iex> config.port
-      8126
-  """
+  @doc "Loads configuration from environment variables, raising an exception on failure."
   @spec load!() :: t() | no_return()
   def load! do
     case load() do
@@ -129,17 +81,7 @@ defmodule OpentelemetryDatadog.Config do
     end
   end
 
-  @doc """
-  Validates the provided configuration.
-
-  ## Examples
-
-      iex> OpentelemetryDatadog.Config.validate(%{host: "localhost", port: 8126})
-      :ok
-      
-      iex> OpentelemetryDatadog.Config.validate(%{port: 8126})
-      {:error, :missing_required_config, "host is required"}
-  """
+  @doc "Validates the provided configuration."
   @spec validate(t() | map()) :: :ok | validation_error()
   def validate(%__MODULE__{} = config) do
     config
