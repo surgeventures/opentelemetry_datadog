@@ -100,17 +100,6 @@ defmodule OpentelemetryDatadog.Config do
 
   @doc """
   Converts the configuration to a keyword list suitable for the exporter.
-
-  ## Examples
-
-      iex> config = %{host: "localhost", port: 8126, service: "my-service"}
-      iex> result = OpentelemetryDatadog.Config.to_exporter_config(config)
-      iex> result[:host]
-      "localhost"
-      iex> result[:port] 
-      8126
-      iex> result[:service]
-      "my-service"
   """
   @spec to_exporter_config(t() | map()) :: keyword()
   def to_exporter_config(%__MODULE__{} = config) do
@@ -204,7 +193,7 @@ defmodule OpentelemetryDatadog.Config do
 
       {:error, _reason} ->
         {:error, :invalid_config,
-         "DD_TAGS must be comma-separated key:value pairs (e.g., 'env:prod,version:1.0')"}
+         "Invalid DD_TAGS entry: '#{tag_str}'. Must be comma-separated key:value pairs (e.g., 'env:prod,version:1.0')"}
     end
   end
 

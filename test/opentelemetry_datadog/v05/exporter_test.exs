@@ -124,23 +124,162 @@ defmodule OpentelemetryDatadog.V05.ExporterTest do
         }
       ]
 
-      # This should not raise an error
       result = Exporter.encode_v05(spans)
       assert is_binary(result)
     end
 
     test "raises on encoding error" do
-      # Invalid data that should cause encoding to fail
       invalid_spans = [
         %{
           trace_id: "not_an_integer"
-          # missing required fields
         }
       ]
 
       assert_raise RuntimeError, ~r/Failed to encode spans for v0.5/, fn ->
         Exporter.encode_v05(invalid_spans)
       end
+    end
+  end
+
+  describe "v0.5 span serialization structure" do
+    test "validates serialized span structure contains all required fields" do
+      known_span = %{
+        trace_id: 123_456_789,
+        span_id: 987_654_321,
+        parent_id: 111_222_333,
+        name: "http.request",
+        service: "web-service",
+        resource: "GET /api/users",
+        type: "web",
+        start: 1_640_995_200_000_000_000,
+        duration: 50_000_000,
+        error: 0,
+        meta: %{"http.method" => "GET", "http.url" => "/api/users"},
+        metrics: %{"_sampling_priority_v1" => 1.0}
+      }
+
+      serialized_payload = Exporter.encode_v05([known_span])
+      unpacked_data = Msgpax.unpack!(serialized_payload)
+
+      assert is_list(unpacked_data)
+      assert length(unpacked_data) == 1
+
+      span_map = List.first(unpacked_data)
+      assert is_map(span_map)
+
+      assert Map.has_key?(span_map, "trace_id")
+      assert Map.has_key?(span_map, "span_id")
+      assert Map.has_key?(span_map, "parent_id")
+      assert Map.has_key?(span_map, "name")
+      assert Map.has_key?(span_map, "service")
+      assert Map.has_key?(span_map, "resource")
+      assert Map.has_key?(span_map, "type")
+      assert Map.has_key?(span_map, "start")
+      assert Map.has_key?(span_map, "duration")
+      assert Map.has_key?(span_map, "error")
+      assert Map.has_key?(span_map, "meta")
+      assert Map.has_key?(span_map, "metrics")
+
+      assert span_map["trace_id"] == 123_456_789
+      assert span_map["span_id"] == 987_654_321
+      assert span_map["parent_id"] == 111_222_333
+      assert span_map["name"] == "http.request"
+      assert span_map["service"] == "web-service"
+      assert span_map["resource"] == "GET /api/users"
+      assert span_map["type"] == "web"
+      assert span_map["start"] == 1_640_995_200_000_000_000
+      assert span_map["duration"] == 50_000_000
+      assert span_map["error"] == 0
+      assert span_map["meta"] == %{"http.method" => "GET", "http.url" => "/api/users"}
+      assert span_map["metrics"] == %{"_sampling_priority_v1" => 1.0}
+    end
+
+    test "validates serialized span structure with nil parent_id" do
+      known_span = %{
+        trace_id: 123_456_789,
+        span_id: 987_654_321,
+        parent_id: nil,
+        name: "root.span",
+        service: "root-service",
+        resource: "root.span",
+        type: "custom",
+        start: 1_640_995_200_000_000_000,
+        duration: 25_000_000,
+        error: 1,
+        meta: %{},
+        metrics: %{}
+      }
+
+      serialized_payload = Exporter.encode_v05([known_span])
+      unpacked_data = Msgpax.unpack!(serialized_payload)
+
+      span_map = List.first(unpacked_data)
+
+      assert Map.has_key?(span_map, "parent_id")
+      assert is_nil(span_map["parent_id"])
+      assert span_map["error"] == 1
+    end
+
+    test "validates serialized span structure with multiple spans" do
+      spans = [
+        %{
+          trace_id: 123_456_789,
+          span_id: 987_654_321,
+          parent_id: nil,
+          name: "parent.span",
+          service: "parent-service",
+          resource: "parent.span",
+          type: "custom",
+          start: 1_640_995_200_000_000_000,
+          duration: 100_000_000,
+          error: 0,
+          meta: %{"span.kind" => "server"},
+          metrics: %{"_sampling_priority_v1" => 1.0}
+        },
+        %{
+          trace_id: 123_456_789,
+          span_id: 111_222_333,
+          parent_id: 987_654_321,
+          name: "child.span",
+          service: "child-service",
+          resource: "child.span",
+          type: "custom",
+          start: 1_640_995_210_000_000_000,
+          duration: 50_000_000,
+          error: 0,
+          meta: %{"span.kind" => "internal"},
+          metrics: %{}
+        }
+      ]
+
+      serialized_payload = Exporter.encode_v05(spans)
+      unpacked_data = Msgpax.unpack!(serialized_payload)
+
+      assert is_list(unpacked_data)
+      assert length(unpacked_data) == 2
+
+      Enum.each(unpacked_data, fn span_map ->
+        assert Map.has_key?(span_map, "trace_id")
+        assert Map.has_key?(span_map, "span_id")
+        assert Map.has_key?(span_map, "parent_id")
+        assert Map.has_key?(span_map, "name")
+        assert Map.has_key?(span_map, "service")
+        assert Map.has_key?(span_map, "resource")
+        assert Map.has_key?(span_map, "type")
+        assert Map.has_key?(span_map, "start")
+        assert Map.has_key?(span_map, "duration")
+        assert Map.has_key?(span_map, "error")
+        assert Map.has_key?(span_map, "meta")
+        assert Map.has_key?(span_map, "metrics")
+
+        assert span_map["trace_id"] == 123_456_789
+        assert is_integer(span_map["span_id"])
+        assert is_integer(span_map["start"])
+        assert is_integer(span_map["duration"])
+        assert span_map["error"] in [0, 1]
+        assert is_map(span_map["meta"])
+        assert is_map(span_map["metrics"])
+      end)
     end
   end
 

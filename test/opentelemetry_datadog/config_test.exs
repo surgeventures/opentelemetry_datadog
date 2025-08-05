@@ -140,7 +140,7 @@ defmodule OpentelemetryDatadog.ConfigTest do
         })
 
         assert {:error, :invalid_config, message} = Config.load()
-        assert message =~ "DD_TAGS must be comma-separated key:value pairs"
+        assert message =~ "Must be comma-separated key:value pairs"
       end
     end
   end
