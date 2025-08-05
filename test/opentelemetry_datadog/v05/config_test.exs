@@ -121,7 +121,6 @@ defmodule OpentelemetryDatadog.V05.ConfigTest do
     end
 
     test "returns error when required env vars are missing" do
-      # Environment is already reset by TestHelpers
       assert {:error, :missing_required_config, _} = Config.setup()
     end
   end
@@ -136,7 +135,6 @@ defmodule OpentelemetryDatadog.V05.ConfigTest do
     end
 
     test "returns error when configuration is invalid" do
-      # Environment is already reset by TestHelpers
       assert {:error, :missing_required_config, _} = Config.get_config()
     end
   end
@@ -151,7 +149,6 @@ defmodule OpentelemetryDatadog.V05.ConfigTest do
     end
 
     test "raises when configuration is invalid" do
-      # Environment is already reset by TestHelpers
       assert_raise OpentelemetryDatadog.ConfigError, fn ->
         Config.get_config!()
       end

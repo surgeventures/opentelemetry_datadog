@@ -23,7 +23,7 @@ defmodule OpentelemetryDatadog.V05.TelemetryTest do
           handler_id,
           event_name,
           &OpentelemetryDatadog.TelemetryHandler.handle_event/4,
-          %{test_pid: test_pid}
+          test_pid: test_pid
         )
 
         handler_id

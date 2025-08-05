@@ -155,7 +155,7 @@ defmodule OpentelemetryDatadog.V05.ExporterTest do
       # Mock mappers that just pass through
       mappers = []
 
-      result = Exporter.apply_mappers(mappers, span, nil, %{})
+      result = OpentelemetryDatadog.Exporter.Shared.apply_mappers(mappers, span, nil, %{})
       assert result == span
     end
 
@@ -173,7 +173,7 @@ defmodule OpentelemetryDatadog.V05.ExporterTest do
 
       mappers = [{TestMapper, []}]
 
-      result = Exporter.apply_mappers(mappers, span, nil, %{})
+      result = OpentelemetryDatadog.Exporter.Shared.apply_mappers(mappers, span, nil, %{})
       assert result == nil
     end
   end

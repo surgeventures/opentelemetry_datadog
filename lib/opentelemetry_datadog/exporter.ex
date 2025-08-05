@@ -30,15 +30,9 @@ defmodule OpentelemetryDatadog.Exporter do
     ]
   end
 
-  @headers [
-    {"Content-Type", "application/msgpack"},
-    {"Datadog-Meta-Lang", "elixir"},
-    {"Datadog-Meta-Lang-Version", System.version()},
-    {"Datadog-Meta-Tracer-Version", Application.spec(:opentelemetry_datadog)[:vsn]}
-  ]
-
-  alias OpentelemetryDatadog.Mapper
-  alias OpentelemetryDatadog.SpanUtils
+  alias OpentelemetryDatadog.{Mapper, SpanUtils}
+  alias OpentelemetryDatadog.Exporter.Shared
+  alias OpentelemetryDatadog.SpanProcessor
 
   @mappers [
     {Mapper.LiftError, []},
@@ -59,14 +53,7 @@ defmodule OpentelemetryDatadog.Exporter do
 
   @impl true
   def export(:traces, tid, resource, %{container_id: container_id} = state) do
-    resource = resource(resource)
-    resource_attrs = attributes(Keyword.fetch!(resource, :attributes))
-
-    data = %{
-      resource: resource,
-      resource_attrs: resource_attrs,
-      resource_map: Keyword.fetch!(resource_attrs, :map)
-    }
+    data = Shared.build_resource_data(resource)
 
     formatted =
       :ets.foldl(
@@ -78,8 +65,7 @@ defmodule OpentelemetryDatadog.Exporter do
       )
 
     count = Enum.count(formatted)
-    headers = @headers ++ [{"X-Datadog-Trace-Count", count}]
-    headers = headers ++ List.wrap(if container_id, do: {"Datadog-Container-ID", container_id})
+    headers = Shared.build_headers(count, container_id)
 
     response =
       formatted
@@ -110,7 +96,7 @@ defmodule OpentelemetryDatadog.Exporter do
 
   defp encode(data) do
     data
-    |> deep_remove_nils()
+    |> Shared.deep_remove_nils()
     |> Msgpax.pack!(data)
   end
 
@@ -120,64 +106,20 @@ defmodule OpentelemetryDatadog.Exporter do
       body: body,
       headers: headers,
       retry: :transient,
-      retry_delay: &retry_delay/1,
+      retry_delay: &Shared.retry_delay/1,
       retry_log_level: false
     )
   end
 
-  defp retry_delay(attempt) do
-    # 3 retries with 10% jitter, example delays: 484ms, 945ms, 1908ms
-    trunc(Integer.pow(2, attempt) * 500 * (1 - 0.1 * :rand.uniform()))
-  end
+  def format_span(span_record, data, state) do
+    processing_state = Shared.build_processing_state(span_record, data)
 
-  def format_span(span_record, data, %{}) do
-    span = span(span_record)
-    attributes = attributes(Keyword.fetch!(span, :attributes))
+    dd_span = Shared.format_span_base(span_record, data, state)
 
-    state =
-      %{
-        events: :otel_events.list(Keyword.fetch!(span, :events))
-      }
-      |> Map.merge(data)
+    dd_span = %{dd_span | meta: Map.put(dd_span.meta, :env, "hans-local-testing")}
 
-    # if events != [] do
-    #  IO.inspect({:events, events})
-    # end
+    span = apply_mappers(dd_span, span(span_record), processing_state)
 
-    dd_span_kind = Atom.to_string(Keyword.fetch!(span, :kind))
-
-    start_time_nanos = :opentelemetry.timestamp_to_nano(Keyword.fetch!(span, :start_time))
-    end_time_nanos = :opentelemetry.timestamp_to_nano(Keyword.fetch!(span, :end_time))
-
-    meta =
-      Keyword.fetch!(attributes, :map)
-      |> Map.put(:"span.kind", dd_span_kind)
-      |> Enum.map(fn
-        {k, v} -> {k, SpanUtils.term_to_string(v)}
-      end)
-      |> Enum.into(%{})
-      # |> Map.put(:"manual.keep", "1")
-      |> Map.put(:env, "hans-local-testing")
-
-    name = Keyword.fetch!(span, :name)
-
-    # Service, Operation, Resource
-
-    dd_span = %OpentelemetryDatadog.DatadogSpan{
-      trace_id: SpanUtils.id_to_datadog_id(Keyword.fetch!(span, :trace_id)),
-      span_id: Keyword.fetch!(span, :span_id),
-      parent_id: SpanUtils.nil_if_undefined(Keyword.fetch!(span, :parent_span_id)),
-      name: name,
-      start: start_time_nanos,
-      duration: end_time_nanos - start_time_nanos,
-      # TODO https://github.com/spandex-project/spandex_datadog/blob/master/lib/spandex_datadog/api_server.ex#L215C15-L215C15
-      meta: meta,
-      metrics: %{}
-    }
-
-    span = apply_mappers(dd_span, span, state)
-
-    # TODO group by trace_id
     case span do
       nil ->
         []
@@ -188,36 +130,13 @@ defmodule OpentelemetryDatadog.Exporter do
     end
   end
 
+  def format_span_with_processor(span_record, data, state) do
+    processor = %SpanProcessor.V04{}
+    processing_state = Map.put(state, :mappers, @mappers)
+    SpanProcessor.process_span(processor, span_record, data, processing_state)
+  end
+
   def apply_mappers(span, otel_span, state) do
-    apply_mappers(@mappers, span, otel_span, state)
+    Shared.apply_mappers(@mappers, span, otel_span, state)
   end
-
-  def apply_mappers([{mapper, mapper_arg} | rest], span, otel_span, state) do
-    case mapper.map(span, otel_span, mapper_arg, state) do
-      {:next, span} -> apply_mappers(rest, span, otel_span, state)
-      nil -> nil
-    end
-  end
-
-  def apply_mappers([], span, _, _), do: span
-
-  @spec deep_remove_nils(term) :: term
-  defp deep_remove_nils(term) when is_map(term) do
-    term
-    |> Enum.reject(fn {_k, v} -> is_nil(v) end)
-    |> Enum.map(fn {k, v} -> {k, deep_remove_nils(v)} end)
-    |> Enum.into(%{})
-  end
-
-  defp deep_remove_nils(term) when is_list(term) do
-    if Keyword.keyword?(term) do
-      term
-      |> Enum.reject(fn {_k, v} -> is_nil(v) end)
-      |> Enum.map(fn {k, v} -> {k, deep_remove_nils(v)} end)
-    else
-      Enum.map(term, &deep_remove_nils/1)
-    end
-  end
-
-  defp deep_remove_nils(term), do: term
 end
