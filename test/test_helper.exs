@@ -4,7 +4,6 @@
   "support/error_scenarios.ex",
   "support/test_fixtures.ex",
   "support/test_helpers.ex",
-  "support/testcontainers.ex",
   "support/telemetry_handler.ex"
 ]
 |> Enum.each(&Code.require_file(&1, __DIR__))
