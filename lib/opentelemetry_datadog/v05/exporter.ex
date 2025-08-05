@@ -9,6 +9,7 @@ defmodule OpentelemetryDatadog.V05.Exporter do
 
   @behaviour :otel_exporter
 
+  require Logger
   require Record
   @deps_dir Mix.Project.deps_path()
   Record.defrecord(
@@ -71,8 +72,12 @@ defmodule OpentelemetryDatadog.V05.Exporter do
       :ets.foldl(
         fn span, acc ->
           case format_span_v05(span, data, state) do
-            [] -> acc
-            span_data -> [span_data | acc]
+            [] ->
+              Logger.warning("Span skipped: #{inspect(span)}")
+              acc
+
+            span_data ->
+              [span_data | acc]
           end
         end,
         [],
