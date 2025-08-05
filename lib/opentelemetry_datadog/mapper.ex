@@ -5,5 +5,6 @@ defmodule OpentelemetryDatadog.Mapper do
   @type arg :: any()
   @type otel_span :: Keyword.t()
 
-  @callback map(span :: DatadogSpan.t(), otel_span :: otel_span(), arg :: any(), state :: state()) :: {:next, DatadogSpan.t()} | nil
+  @callback map(span :: DatadogSpan.t(), otel_span :: otel_span(), arg :: any(), state :: state()) ::
+              {:next, DatadogSpan.t()} | nil
 end
