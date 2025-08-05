@@ -1,28 +1,11 @@
 defmodule OpentelemetryDatadog.Config.Parser do
   @moduledoc """
   Environment variable parser and type converter for Datadog configuration.
-
-  Handles parsing, type conversion, and validation of environment variables
-  with proper error handling and type-specific formatting.
   """
 
   @type validation_error :: {:error, :missing_required_config | :invalid_config, String.t()}
 
-  @doc """
-  Unified environment variable getter with type conversion and validation.
-
-  ## Parameters
-  - `env_var` - Environment variable name
-  - `type` - Type to convert to (`:string`, `:integer`, `:float`)
-  - `opts` - Options: `default:`, `validate:`, `env_var_name:` (for error messages)
-
-  ## Examples
-
-      iex> System.put_env("DD_TRACE_AGENT_PORT", "9126")
-      iex> {:ok, port} = OpentelemetryDatadog.Config.Parser.get_env("DD_TRACE_AGENT_PORT", :integer)
-      iex> port
-      9126
-  """
+  @doc "Unified environment variable getter with type conversion and validation."
   @spec get_env(String.t(), atom(), keyword()) :: {:ok, any()} | validation_error()
   def get_env(env_var, type, opts \\ []) do
     default = Keyword.get(opts, :default)

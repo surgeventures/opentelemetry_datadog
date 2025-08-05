@@ -30,7 +30,8 @@ defmodule OpentelemetryDatadog.MixProject do
     [
       {:opentelemetry, "~> 1.4", runtime: false},
       {:msgpax, "~> 2.4"},
-      {:req, "~> 0.4.14"}
+      {:req, "~> 0.4.14"},
+      {:testcontainers, "~> 1.8", only: :test}
     ]
   end
 

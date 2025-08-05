@@ -1,19 +1,8 @@
 # OpentelemetryDatadog
 
-Datadog exporter for OpenTelemetry in Elixir.  
-Exports traces directly to the Datadog Agent using the native Datadog protocol over MessagePack.
+Datadog exporter for OpenTelemetry in Elixir. Exports traces directly to the Datadog Agent using native Datadog protocol over MessagePack.
 
-Supports both `/v0.4/traces` (default) and `/v0.5/traces` endpoints.
-
-## Why?
-
-This library exists to provide a Datadog integration that:
-
-- **Respects native Datadog sampling (priority sampling)**
-- **Avoids OTLP translation layers**
-- **Supports Datadog-specific features**, like `sampling_priority`, `x-datadog-*` headers, and structured `meta`/`metrics` fields
-
----
+Supports `/v0.4/traces` (default) and `/v0.5/traces` endpoints.
 
 ## Installation
 
@@ -29,15 +18,7 @@ end
 
 ## Configuration
 
-You can configure the exporter in two ways:
-
----
-
-### 1. Environment-based configuration
-
-Recommended for runtime or production use.
-
-Set the following variables in your shell or deployment environment:
+### Environment Variables
 
 ```bash
 export DD_AGENT_HOST=localhost
@@ -47,30 +28,21 @@ export DD_TAGS="team:platform,env:prod"
 export DD_TRACE_SAMPLE_RATE=0.25
 ```
 
-Then initialize the exporter in your application:
 ```elixir
 OpentelemetryDatadog.setup()
 ```
 
-## Supported Environment Variables
+| Variable               | Required | Default | Description |
+|------------------------|----------|---------|-------------|
+| `DD_AGENT_HOST`        | yes      | -       | Agent hostname |
+| `DD_TRACE_AGENT_PORT`  | no       | 8126    | Agent port |
+| `DD_SERVICE`           | no       | -       | Service name |
+| `DD_VERSION`           | no       | -       | App version |
+| `DD_ENV`               | no       | -       | Environment |
+| `DD_TAGS`              | no       | -       | Tags (comma-separated) |
+| `DD_TRACE_SAMPLE_RATE` | no       | -       | Sample rate (0.0-1.0) |
 
-| Variable               | Required   | Description                                     |
-|------------------------|------------|-------------------------------------------------|
-| `DD_AGENT_HOST`        | true       | Hostname for the Datadog Agent                  |
-| `DD_TRACE_AGENT_PORT`  | false      | Port for the agent (default: `8126`)            |
-| `DD_SERVICE`           | false      | Logical service name                            |
-| `DD_VERSION`           | false      | Application version                             |
-| `DD_ENV`               | false      | Environment name (`dev`, `prod`, etc.)          |
-| `DD_TAGS`              | false      | Comma-separated `key:value` tags                |
-| `DD_TRACE_SAMPLE_RATE` | false      | Sampling rate as a float between `0.0–1.0`      |
-
-You can also use `setup!/0` to raise if any required configuration is missing or invalid.
-
----
-
-## Manual Configuration
-
-Instead of relying on ENV vars, you can pass configuration directly as a keyword list:
+### Manual Configuration
 
 ```elixir
 OpentelemetryDatadog.setup([
@@ -82,9 +54,7 @@ OpentelemetryDatadog.setup([
 ])
 ```
 
-## OpenTelemetry Setup Example
-
-Example configuration to wire the exporter into your OpenTelemetry setup:
+## OpenTelemetry Setup
 
 ### Using v0.4 API (default)
 
@@ -114,33 +84,20 @@ config :opentelemetry,
   }
 ```
 
-The above configs will:
-* Send traces to a DataDog agent running on `localhost:8126`
-* Randomly sample traces at a rate of 0.5, while accurately reporting sampling rates to DataDog
-* Setup a propagator that is compatible with the "x-datadog-*" headers
+## v0.5 API
 
-## v0.5 API Features
+Required fields: `trace_id`, `span_id`, `parent_id`, `name`, `service`, `resource`, `type`, `start`, `duration`, `error`, `meta`, `metrics`.
 
-The v0.5 exporter uses the `/v0.5/traces` endpoint and includes:
+## Testing
 
-- **Field validation**: Validates all mandatory fields before encoding
-- **MessagePack encoding**: Converts spans to binary MessagePack format
-- **Resource mapping**: Maps OpenTelemetry resources to Datadog span fields
-- **Type conversion**: Converts data types to match Datadog requirements
+```bash
+mix test
+```
 
-### v0.5 Required Fields
+### Integration Tests
 
-When using the v0.5 API, each span must include these mandatory fields:
+```bash
+MIX_ENV=test mix test --include integration
+```
 
-- `trace_id`: integer() - Unique trace identifier
-- `span_id`: integer() - Unique span identifier  
-- `parent_id`: integer() | nil - Parent span ID (nil for root spans)
-- `name`: string() - Operation name
-- `service`: string() - Service name
-- `resource`: string() - Resource being accessed
-- `type`: string() - Span type (web, db, cache, etc.)
-- `start`: integer() - Start time in nanoseconds
-- `duration`: integer() - Duration in nanoseconds
-- `error`: 0 | 1 - Error flag (0 = no error, 1 = error)
-- `meta`: %{string() => string()} - String metadata
-- `metrics`: %{string() => number()} - Numeric metrics
+Integration tests automatically start a Datadog Agent container (requires Docker).

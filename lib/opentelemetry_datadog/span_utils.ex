@@ -1,42 +1,16 @@
 defmodule OpentelemetryDatadog.SpanUtils do
   @moduledoc """
   Common utilities for span processing shared between v0.4 and v0.5 exporters.
-  
-  This module contains helper functions that are used by both the original
-  exporter and the v0.5 exporter to avoid code duplication.
   """
 
-  @doc """
-  Converts various term types to strings for metadata.
-  
-  ## Examples
-  
-      iex> OpentelemetryDatadog.SpanUtils.term_to_string(true)
-      "true"
-      
-      iex> OpentelemetryDatadog.SpanUtils.term_to_string(:atom)
-      "atom"
-      
-      iex> OpentelemetryDatadog.SpanUtils.term_to_string("string")
-      "string"
-  """
+  @doc "Converts various term types to strings for metadata."
   @spec term_to_string(term()) :: String.t()
   def term_to_string(term) when is_boolean(term), do: inspect(term)
   def term_to_string(term) when is_binary(term), do: term
   def term_to_string(term) when is_atom(term), do: Atom.to_string(term)
   def term_to_string(term), do: inspect(term)
 
-  @doc """
-  Converts :undefined to nil, passes through other values.
-  
-  ## Examples
-  
-      iex> OpentelemetryDatadog.SpanUtils.nil_if_undefined(:undefined)
-      nil
-      
-      iex> OpentelemetryDatadog.SpanUtils.nil_if_undefined("value")
-      "value"
-  """
+  @doc "Converts :undefined to nil, passes through other values."
   @spec nil_if_undefined(term()) :: term()
   def nil_if_undefined(:undefined), do: nil
   def nil_if_undefined(value), do: value

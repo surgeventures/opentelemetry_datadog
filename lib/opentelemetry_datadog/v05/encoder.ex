@@ -1,47 +1,9 @@
 defmodule OpentelemetryDatadog.V05.Encoder do
   @moduledoc """
   Encoder for Datadog v0.5 traces API.
-  
-  Serializes spans to MessagePack format as required by the /v0.5/traces endpoint.
-  Includes all mandatory fields according to Datadog v0.5 specification.
   """
 
-  @doc """
-  Encodes a list of spans to MessagePack format for v0.5 API.
-  
-  Each span must contain the following mandatory fields:
-  - trace_id: integer()
-  - span_id: integer() 
-  - parent_id: integer() | nil
-  - name: string()
-  - service: string()
-  - resource: string()
-  - type: string()
-  - start: integer() (nanoseconds)
-  - duration: integer() (nanoseconds)
-  - error: 0 | 1
-  - meta: %{string() => string()}
-  - metrics: %{string() => number()}
-  
-  ## Examples
-  
-      iex> spans = [%{
-      ...>   trace_id: 123456789,
-      ...>   span_id: 987654321,
-      ...>   parent_id: nil,
-      ...>   name: "web.request",
-      ...>   service: "my-service",
-      ...>   resource: "GET /api/users",
-      ...>   type: "web",
-      ...>   start: 1640995200000000000,
-      ...>   duration: 50000000,
-      ...>   error: 0,
-      ...>   meta: %{"http.method" => "GET"},
-      ...>   metrics: %{"http.status_code" => 200}
-      ...> }]
-      iex> OpentelemetryDatadog.V05.Encoder.encode(spans)
-      {:ok, <<binary_data>>}
-  """
+  @doc "Encodes a list of spans to MessagePack format for v0.5 API."
   @spec encode([map()]) :: {:ok, binary()} | {:error, term()}
   def encode(spans) when is_list(spans) do
     try do

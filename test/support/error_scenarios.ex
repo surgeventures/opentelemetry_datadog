@@ -1,25 +1,11 @@
 defmodule OpentelemetryDatadog.ErrorScenarios do
   @moduledoc """
   Error testing utilities for Datadog configuration validation.
-
-  Provides pre-configured scenarios that should trigger various error
-  conditions in the configuration loading and validation process.
   """
 
   alias OpentelemetryDatadog.EnvHelpers
 
-  @doc """
-  Sets up configuration with invalid port number.
-
-  Used to test port validation in configuration loading.
-
-  ## Examples
-
-      iex> invalid_port_config()
-      :ok
-      iex> System.get_env("DD_TRACE_AGENT_PORT")
-      "invalid"
-  """
+  @doc "Sets up configuration with invalid port number."
   @spec invalid_port_config() :: :ok
   def invalid_port_config do
     EnvHelpers.put_env(%{
@@ -28,18 +14,7 @@ defmodule OpentelemetryDatadog.ErrorScenarios do
     })
   end
 
-  @doc """
-  Sets up configuration with invalid sample rate.
-
-  Sample rate should be between 0.0 and 1.0, this sets it above 1.0.
-
-  ## Examples
-
-      iex> invalid_sample_rate_config()
-      :ok  
-      iex> System.get_env("DD_TRACE_SAMPLE_RATE")
-      "1.5"
-  """
+  @doc "Sets up configuration with invalid sample rate."
   @spec invalid_sample_rate_config() :: :ok
   def invalid_sample_rate_config do
     EnvHelpers.put_env(%{
@@ -48,18 +23,7 @@ defmodule OpentelemetryDatadog.ErrorScenarios do
     })
   end
 
-  @doc """
-  Sets up configuration with port number out of valid range.
-
-  Port numbers should be 1-65535, this sets it above that range.
-
-  ## Examples
-
-      iex> port_out_of_range_config()
-      :ok
-      iex> System.get_env("DD_TRACE_AGENT_PORT")
-      "99999"
-  """
+  @doc "Sets up configuration with port number out of valid range."
   @spec port_out_of_range_config() :: :ok
   def port_out_of_range_config do
     EnvHelpers.put_env(%{

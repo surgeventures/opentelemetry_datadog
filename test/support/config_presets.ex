@@ -1,48 +1,17 @@
 defmodule OpentelemetryDatadog.ConfigPresets do
   @moduledoc """
-  Pre-configured environment variable setups for common scenarios.
-
-  Provides convenient functions for setting up typical Datadog configurations
-  used in different environments (development, production, staging, etc.).
+  Pre-configured environment setups for common scenarios.
   """
 
   alias OpentelemetryDatadog.EnvHelpers
 
-  @doc """
-  Sets up minimal configuration (only DD_AGENT_HOST).
-
-  ## Examples
-
-      iex> minimal_config()
-      :ok
-      iex> System.get_env("DD_AGENT_HOST")
-      "localhost"
-      
-      iex> minimal_config("custom-host")
-      :ok
-      iex> System.get_env("DD_AGENT_HOST")
-      "custom-host"
-  """
+  @doc "Sets up minimal configuration (only DD_AGENT_HOST)."
   @spec minimal_config(String.t()) :: :ok
   def minimal_config(host \\ "localhost") do
     EnvHelpers.put_env(%{"DD_AGENT_HOST" => host})
   end
 
-  @doc """
-  Sets up development environment configuration.
-
-  ## Examples
-
-      iex> dev_config()
-      :ok
-      iex> System.get_env("DD_ENV")
-      "development"
-      
-      iex> dev_config("my-app")
-      :ok
-      iex> System.get_env("DD_SERVICE")
-      "my-app"
-  """
+  @doc "Sets up development environment configuration."
   @spec dev_config(String.t()) :: :ok
   def dev_config(service \\ "test-app") do
     EnvHelpers.put_env(%{
@@ -52,21 +21,7 @@ defmodule OpentelemetryDatadog.ConfigPresets do
     })
   end
 
-  @doc """
-  Sets up production environment configuration.
-
-  ## Examples
-
-      iex> prod_config()
-      :ok
-      iex> System.get_env("DD_ENV")
-      "production"
-      
-      iex> prod_config("user-service", "v1.2.3")
-      :ok
-      iex> System.get_env("DD_VERSION")
-      "v1.2.3"
-  """
+  @doc "Sets up production environment configuration."
   @spec prod_config(String.t(), String.t()) :: :ok
   def prod_config(service \\ "api-service", version \\ "v1.0.0") do
     EnvHelpers.put_env(%{

@@ -1,9 +1,6 @@
 defmodule OpentelemetryDatadog.DatadogConstants do
   @moduledoc """
   Centralized constants for Datadog environment variables and configuration.
-
-  This module provides a single source of truth for all Datadog-related
-  environment variables, their defaults, and sampling constants.
   """
 
   @env_vars [
@@ -16,20 +13,11 @@ defmodule OpentelemetryDatadog.DatadogConstants do
     "DD_TRACE_SAMPLE_RATE"
   ]
 
-  @doc """
-  Returns list of all supported Datadog environment variables.
-
-  ## Examples
-
-      iex> OpentelemetryDatadog.DatadogConstants.env_vars()
-      ["DD_AGENT_HOST", "DD_TRACE_AGENT_PORT", ...]
-  """
+  @doc "Returns list of all supported Datadog environment variables."
   @spec env_vars() :: [String.t()]
   def env_vars, do: @env_vars
 
-  @doc """
-  Default values for configuration parameters.
-  """
+  @doc "Default values for configuration parameters."
   @defaults %{
     port: 8126,
     sample_rate: nil,
@@ -41,17 +29,7 @@ defmodule OpentelemetryDatadog.DatadogConstants do
 
   def defaults, do: @defaults
 
-  @doc """
-  Get default value for a specific configuration key.
-
-  ## Examples
-
-      iex> OpentelemetryDatadog.DatadogConstants.default(:port)
-      8126
-      
-      iex> OpentelemetryDatadog.DatadogConstants.default(:service)
-      nil
-  """
+  @doc "Get default value for a specific configuration key."
   def default(key) when key in [:port, :sample_rate, :service, :version, :env, :tags] do
     Map.get(@defaults, key)
   end
