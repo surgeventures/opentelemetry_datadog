@@ -1,7 +1,7 @@
 defmodule OpentelemetryDatadog.V05.Config do
   @moduledoc """
   Configuration utilities for v0.5 Datadog exporter.
-  
+
   Provides helper functions to configure the v0.5 exporter alongside
   the existing configuration system without modifying existing code.
   """
@@ -10,12 +10,12 @@ defmodule OpentelemetryDatadog.V05.Config do
 
   @doc """
   Converts standard Datadog configuration to v0.5 exporter configuration.
-  
+
   Takes the same configuration format as the standard exporter but ensures
   the protocol is set to :v05 for the v0.5 exporter.
-  
+
   ## Examples
-  
+
       iex> config = [host: "localhost", port: 8126, service: "my-service"]
       iex> v05_config = OpentelemetryDatadog.V05.Config.to_v05_exporter_config(config)
       iex> v05_config[:protocol]
@@ -37,12 +37,12 @@ defmodule OpentelemetryDatadog.V05.Config do
 
   @doc """
   Sets up the v0.5 Datadog exporter with configuration from environment variables.
-  
+
   This is a convenience function that loads configuration from environment
   variables and configures the v0.5 exporter.
-  
+
   ## Examples
-  
+
       # With environment variables set
       iex> System.put_env("DD_AGENT_HOST", "localhost")
       iex> OpentelemetryDatadog.V05.Config.setup()
@@ -64,9 +64,9 @@ defmodule OpentelemetryDatadog.V05.Config do
 
   @doc """
   Sets up the v0.5 Datadog exporter with the provided configuration.
-  
+
   ## Examples
-  
+
       iex> config = [host: "localhost", port: 8126]
       iex> OpentelemetryDatadog.V05.Config.setup(config)
       :ok
@@ -75,11 +75,11 @@ defmodule OpentelemetryDatadog.V05.Config do
   def setup(config) when is_list(config) do
     # Extract protocol to validate it's v05, then validate the rest
     {protocol, base_config} = Keyword.pop(config, :protocol, :v05)
-    
+
     case protocol do
       :v05 ->
         config_map = Enum.into(base_config, %{})
-        
+
         case Config.validate(config_map) do
           :ok ->
             # TODO: Automatically configure and register v0.5 OpenTelemetry exporter
@@ -88,7 +88,7 @@ defmodule OpentelemetryDatadog.V05.Config do
           {:error, _, _} = error ->
             error
         end
-      
+
       other ->
         {:error, :invalid_config, "v0.5 exporter requires protocol: :v05, got: #{inspect(other)}"}
     end
@@ -96,9 +96,9 @@ defmodule OpentelemetryDatadog.V05.Config do
 
   @doc """
   Sets up the v0.5 Datadog exporter, raising an exception on failure.
-  
+
   ## Examples
-  
+
       # With environment variables set
       iex> System.put_env("DD_AGENT_HOST", "localhost")
       iex> OpentelemetryDatadog.V05.Config.setup!()
@@ -114,9 +114,9 @@ defmodule OpentelemetryDatadog.V05.Config do
 
   @doc """
   Sets up the v0.5 Datadog exporter with the provided configuration, raising an exception on failure.
-  
+
   ## Examples
-  
+
       iex> config = [host: "localhost", port: 8126, protocol: :v05]
       iex> OpentelemetryDatadog.V05.Config.setup!(config)
       :ok
@@ -131,11 +131,11 @@ defmodule OpentelemetryDatadog.V05.Config do
 
   @doc """
   Returns the current configuration for v0.5 exporter.
-  
+
   This loads the standard configuration and adds the v0.5 protocol setting.
-  
+
   ## Examples
-  
+
       iex> System.put_env("DD_AGENT_HOST", "localhost")
       iex> {:ok, config} = OpentelemetryDatadog.V05.Config.get_config()
       iex> config[:protocol]
@@ -145,11 +145,11 @@ defmodule OpentelemetryDatadog.V05.Config do
   def get_config do
     case Config.load() do
       {:ok, config} ->
-        v05_config = 
+        v05_config =
           config
           |> Config.to_exporter_config()
           |> to_v05_exporter_config()
-        
+
         {:ok, v05_config}
 
       {:error, _, _} = error ->
@@ -159,9 +159,9 @@ defmodule OpentelemetryDatadog.V05.Config do
 
   @doc """
   Returns the current configuration for v0.5 exporter, raising an exception on failure.
-  
+
   ## Examples
-  
+
       iex> System.put_env("DD_AGENT_HOST", "localhost")
       iex> config = OpentelemetryDatadog.V05.Config.get_config!()
       iex> config[:protocol]

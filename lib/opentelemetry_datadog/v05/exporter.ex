@@ -1,7 +1,7 @@
 defmodule OpentelemetryDatadog.V05.Exporter do
   @moduledoc """
   Datadog v0.5 traces exporter for OpenTelemetry.
-  
+
   This exporter sends traces to the Datadog Agent using the /v0.5/traces endpoint
   with MessagePack serialization. It maintains compatibility with the existing
   exporter while providing v0.5 specific functionality.
@@ -57,7 +57,7 @@ defmodule OpentelemetryDatadog.V05.Exporter do
   @impl true
   def init(config) do
     protocol = Keyword.get(config, :protocol, :v05)
-    
+
     state = %State{
       host: Keyword.fetch!(config, :host),
       port: Keyword.fetch!(config, :port),
@@ -92,12 +92,12 @@ defmodule OpentelemetryDatadog.V05.Exporter do
       )
 
     count = Enum.count(formatted)
-    
+
     # Emit telemetry start event
     start_time = System.monotonic_time()
     system_time = System.system_time()
     endpoint = "/v0.5/traces"
-    
+
     :telemetry.execute(
       [:opentelemetry_datadog, :export, :start],
       %{system_time: system_time, span_count: count},
@@ -106,7 +106,10 @@ defmodule OpentelemetryDatadog.V05.Exporter do
 
     try do
       headers = @headers ++ [{"X-Datadog-Trace-Count", count}]
-      headers = headers ++ List.wrap(if state.container_id, do: {"Datadog-Container-ID", state.container_id})
+
+      headers =
+        headers ++
+          List.wrap(if state.container_id, do: {"Datadog-Container-ID", state.container_id})
 
       response =
         formatted
@@ -123,7 +126,7 @@ defmodule OpentelemetryDatadog.V05.Exporter do
             %{duration: duration, status_code: status_code, span_count: count},
             %{endpoint: endpoint, host: state.host, port: state.port}
           )
-          
+
           # v0.5 API response handling
           case resp.body do
             %{"rate_by_service" => _rate_by_service} -> nil
@@ -143,7 +146,7 @@ defmodule OpentelemetryDatadog.V05.Exporter do
               retry: false
             }
           )
-          
+
           IO.inspect({:trace_error_response_v05, response})
 
         {:error, error} ->
@@ -159,7 +162,7 @@ defmodule OpentelemetryDatadog.V05.Exporter do
               retry: true
             }
           )
-          
+
           IO.inspect({:trace_error_response_v05, {:error, error}})
       end
     rescue
@@ -177,7 +180,7 @@ defmodule OpentelemetryDatadog.V05.Exporter do
             port: state.port
           }
         )
-        
+
         reraise exception, __STACKTRACE__
     end
 
@@ -200,8 +203,10 @@ defmodule OpentelemetryDatadog.V05.Exporter do
 
   def encode_v05(data) do
     case Encoder.encode(data) do
-      {:ok, encoded} -> encoded
-      {:error, error} -> 
+      {:ok, encoded} ->
+        encoded
+
+      {:error, error} ->
         IO.inspect({:encoding_error_v05, error})
         raise "Failed to encode spans for v0.5: #{inspect(error)}"
     end
@@ -287,7 +292,7 @@ defmodule OpentelemetryDatadog.V05.Exporter do
           meta: span.meta || %{},
           metrics: span.metrics || %{}
         }
-        
+
         span_map
     end
   end

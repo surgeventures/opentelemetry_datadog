@@ -11,7 +11,7 @@ defmodule OpentelemetryDatadog.Testcontainers do
     log_level = Keyword.get(opts, :log_level, "info")
     _wait_timeout = Keyword.get(opts, :wait_timeout, 30_000)
 
-    config = 
+    config =
       Testcontainers.Container.new(image)
       |> Testcontainers.Container.with_environment("DD_APM_ENABLED", "true")
       |> Testcontainers.Container.with_environment("DD_APM_NON_LOCAL_TRAFFIC", "true")
@@ -41,14 +41,15 @@ defmodule OpentelemetryDatadog.Testcontainers do
   @spec get_connection_info(Testcontainers.Container.t()) :: {String.t(), integer()}
   def get_connection_info(container) do
     host = Testcontainers.get_host(container)
-    
-    port = case Enum.find(container.exposed_ports, fn {container_port, _host_port} ->
-      container_port == 8126 
-    end) do
-      {_container_port, host_port} -> host_port
-      nil -> 8126
-    end
-    
+
+    port =
+      case Enum.find(container.exposed_ports, fn {container_port, _host_port} ->
+             container_port == 8126
+           end) do
+        {_container_port, host_port} -> host_port
+        nil -> 8126
+      end
+
     {host, port}
   end
 
@@ -63,20 +64,20 @@ defmodule OpentelemetryDatadog.Testcontainers do
   def wait_for_agent(container, timeout \\ 30_000) do
     {host, port} = get_connection_info(container)
     url = "http://#{host}:#{port}/info"
-    
+
     wait_for_agent_ready(url, timeout, System.monotonic_time(:millisecond))
   end
 
   defp wait_for_agent_ready(url, timeout, start_time) do
     current_time = System.monotonic_time(:millisecond)
-    
+
     if current_time - start_time > timeout do
       {:error, :timeout}
     else
       case Req.get(url) do
         {:ok, %{status: 200}} ->
           :ok
-        
+
         _ ->
           Process.sleep(500)
           wait_for_agent_ready(url, timeout, start_time)

@@ -1,21 +1,21 @@
 defmodule OpentelemetryDatadog.V05.EncoderTest do
   use ExUnit.Case, async: true
-  
+
   alias OpentelemetryDatadog.V05.Encoder
 
   describe "encode/1" do
     test "encodes valid spans to MessagePack" do
       spans = [
         %{
-          trace_id: 123456789,
-          span_id: 987654321,
+          trace_id: 123_456_789,
+          span_id: 987_654_321,
           parent_id: nil,
           name: "web.request",
           service: "my-service",
           resource: "GET /api/users",
           type: "web",
-          start: 1640995200000000000,
-          duration: 50000000,
+          start: 1_640_995_200_000_000_000,
+          duration: 50_000_000,
           error: 0,
           meta: %{"http.method" => "GET"},
           metrics: %{"http.status_code" => 200}
@@ -24,15 +24,15 @@ defmodule OpentelemetryDatadog.V05.EncoderTest do
 
       assert {:ok, encoded} = Encoder.encode(spans)
       assert is_binary(encoded)
-      
+
       # Verify we can decode it back
       {:ok, decoded} = Msgpax.unpack(encoded)
       assert is_list(decoded)
       assert length(decoded) == 1
-      
+
       [span] = decoded
-      assert span["trace_id"] == 123456789
-      assert span["span_id"] == 987654321
+      assert span["trace_id"] == 123_456_789
+      assert span["span_id"] == 987_654_321
       assert span["name"] == "web.request"
       assert span["service"] == "my-service"
     end
@@ -40,29 +40,29 @@ defmodule OpentelemetryDatadog.V05.EncoderTest do
     test "encodes multiple spans" do
       spans = [
         %{
-          trace_id: 123456789,
-          span_id: 987654321,
+          trace_id: 123_456_789,
+          span_id: 987_654_321,
           parent_id: nil,
           name: "web.request",
           service: "my-service",
           resource: "GET /api/users",
           type: "web",
-          start: 1640995200000000000,
-          duration: 50000000,
+          start: 1_640_995_200_000_000_000,
+          duration: 50_000_000,
           error: 0,
           meta: %{},
           metrics: %{}
         },
         %{
-          trace_id: 123456789,
-          span_id: 987654322,
-          parent_id: 987654321,
+          trace_id: 123_456_789,
+          span_id: 987_654_322,
+          parent_id: 987_654_321,
           name: "db.query",
           service: "my-service",
           resource: "SELECT * FROM users",
           type: "db",
-          start: 1640995200010000000,
-          duration: 30000000,
+          start: 1_640_995_200_010_000_000,
+          duration: 30_000_000,
           error: 0,
           meta: %{"db.statement" => "SELECT * FROM users"},
           metrics: %{"db.rows_affected" => 5}
@@ -88,31 +88,31 @@ defmodule OpentelemetryDatadog.V05.EncoderTest do
   describe "validate_and_normalize_span/1" do
     test "validates and normalizes a valid span" do
       span = %{
-        trace_id: 123456789,
-        span_id: 987654321,
+        trace_id: 123_456_789,
+        span_id: 987_654_321,
         parent_id: nil,
         name: "test.span",
         service: "test-service",
         resource: "test-resource",
         type: "custom",
-        start: 1640995200000000000,
-        duration: 50000000,
+        start: 1_640_995_200_000_000_000,
+        duration: 50_000_000,
         error: 0,
         meta: %{"key" => "value"},
         metrics: %{"count" => 1}
       }
 
       result = Encoder.validate_and_normalize_span(span)
-      
-      assert result.trace_id == 123456789
-      assert result.span_id == 987654321
+
+      assert result.trace_id == 123_456_789
+      assert result.span_id == 987_654_321
       assert result.parent_id == nil
       assert result.name == "test.span"
       assert result.service == "test-service"
       assert result.resource == "test-resource"
       assert result.type == "custom"
-      assert result.start == 1640995200000000000
-      assert result.duration == 50000000
+      assert result.start == 1_640_995_200_000_000_000
+      assert result.duration == 50_000_000
       assert result.error == 0
       assert result.meta == %{"key" => "value"}
       assert result.metrics == %{"count" => 1}

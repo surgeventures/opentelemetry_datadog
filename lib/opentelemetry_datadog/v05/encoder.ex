@@ -21,7 +21,7 @@ defmodule OpentelemetryDatadog.V05.Encoder do
 
   @doc """
   Validates and normalizes a single span for v0.5 format.
-  
+
   Ensures all mandatory fields are present and properly typed.
   """
   @spec validate_and_normalize_span(map()) :: map()
@@ -52,9 +52,14 @@ defmodule OpentelemetryDatadog.V05.Encoder do
 
   defp get_optional_integer(span, key) do
     case Map.get(span, key) do
-      nil -> nil
-      value when is_integer(value) -> value
-      value -> raise ArgumentError, "Field #{key} must be an integer or nil, got: #{inspect(value)}"
+      nil ->
+        nil
+
+      value when is_integer(value) ->
+        value
+
+      value ->
+        raise ArgumentError, "Field #{key} must be an integer or nil, got: #{inspect(value)}"
     end
   end
 
@@ -69,12 +74,24 @@ defmodule OpentelemetryDatadog.V05.Encoder do
 
   defp get_error_flag(span) do
     case Map.get(span, :error, 0) do
-      0 -> 0
-      1 -> 1
-      true -> 1
-      false -> 0
-      nil -> 0
-      value -> raise ArgumentError, "Field error must be 0, 1, true, false, or nil, got: #{inspect(value)}"
+      0 ->
+        0
+
+      1 ->
+        1
+
+      true ->
+        1
+
+      false ->
+        0
+
+      nil ->
+        0
+
+      value ->
+        raise ArgumentError,
+              "Field error must be 0, 1, true, false, or nil, got: #{inspect(value)}"
     end
   end
 
@@ -89,9 +106,12 @@ defmodule OpentelemetryDatadog.V05.Encoder do
           {k, v} when is_atom(k) -> {Atom.to_string(k), to_string(v)}
           {k, v} -> {to_string(k), to_string(v)}
         end)
-      
-      nil -> %{}
-      value -> raise ArgumentError, "Field meta must be a map, got: #{inspect(value)}"
+
+      nil ->
+        %{}
+
+      value ->
+        raise ArgumentError, "Field meta must be a map, got: #{inspect(value)}"
     end
   end
 
@@ -100,34 +120,46 @@ defmodule OpentelemetryDatadog.V05.Encoder do
       metrics when is_map(metrics) ->
         # Ensure all keys are strings and values are numbers
         Enum.into(metrics, %{}, fn
-          {k, v} when is_binary(k) and is_number(v) -> {k, v}
-          {k, v} when is_atom(k) and is_number(v) -> {Atom.to_string(k), v}
-          {k, v} when is_binary(k) -> 
+          {k, v} when is_binary(k) and is_number(v) ->
+            {k, v}
+
+          {k, v} when is_atom(k) and is_number(v) ->
+            {Atom.to_string(k), v}
+
+          {k, v} when is_binary(k) ->
             case parse_number(v) do
               {:ok, num} -> {k, num}
               :error -> raise ArgumentError, "Metrics value must be a number, got: #{inspect(v)}"
             end
-          {k, v} when is_atom(k) -> 
+
+          {k, v} when is_atom(k) ->
             case parse_number(v) do
               {:ok, num} -> {Atom.to_string(k), num}
               :error -> raise ArgumentError, "Metrics value must be a number, got: #{inspect(v)}"
             end
-          {k, v} -> 
+
+          {k, v} ->
             case parse_number(v) do
               {:ok, num} -> {to_string(k), num}
               :error -> raise ArgumentError, "Metrics value must be a number, got: #{inspect(v)}"
             end
         end)
-      
-      nil -> %{}
-      value -> raise ArgumentError, "Field metrics must be a map, got: #{inspect(value)}"
+
+      nil ->
+        %{}
+
+      value ->
+        raise ArgumentError, "Field metrics must be a map, got: #{inspect(value)}"
     end
   end
 
   defp parse_number(value) when is_number(value), do: {:ok, value}
+
   defp parse_number(value) when is_binary(value) do
     case Float.parse(value) do
-      {num, ""} -> {:ok, num}
+      {num, ""} ->
+        {:ok, num}
+
       _ ->
         case Integer.parse(value) do
           {num, ""} -> {:ok, num}
@@ -135,5 +167,6 @@ defmodule OpentelemetryDatadog.V05.Encoder do
         end
     end
   end
+
   defp parse_number(_), do: :error
 end

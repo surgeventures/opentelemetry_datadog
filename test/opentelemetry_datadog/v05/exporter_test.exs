@@ -1,7 +1,7 @@
 defmodule OpentelemetryDatadog.V05.ExporterTest do
   use ExUnit.Case, async: true
   use OpentelemetryDatadog.TestHelpers
-  
+
   alias OpentelemetryDatadog.V05.Exporter
 
   describe "init/1" do
@@ -63,12 +63,12 @@ defmodule OpentelemetryDatadog.V05.ExporterTest do
   describe "format_span_v05/3" do
     test "formats span with required v0.5 fields" do
       span_data = %{
-        trace_id: 123456789,
-        span_id: 987654321,
+        trace_id: 123_456_789,
+        span_id: 987_654_321,
         parent_id: nil,
         name: "test.span",
-        start: 1640995200000000000,
-        duration: 50000000
+        start: 1_640_995_200_000_000_000,
+        duration: 50_000_000
       }
 
       data = %{
@@ -79,8 +79,8 @@ defmodule OpentelemetryDatadog.V05.ExporterTest do
       }
 
       assert function_exported?(Exporter, :format_span_v05, 3)
-      
-      assert span_data.trace_id == 123456789
+
+      assert span_data.trace_id == 123_456_789
       assert data.resource_map["service.name"] == "test-service"
     end
   end
@@ -95,11 +95,11 @@ defmodule OpentelemetryDatadog.V05.ExporterTest do
     test "exporter module has required functions" do
       # Test that the module compiles and basic functions work
       config = [host: "localhost", port: 8126, protocol: :v05]
-      
+
       # Test init function
       assert {:ok, state} = Exporter.init(config)
       assert state.protocol == :v05
-      
+
       # Test shutdown function
       assert Exporter.shutdown(state) == :ok
     end
@@ -109,15 +109,15 @@ defmodule OpentelemetryDatadog.V05.ExporterTest do
     test "encodes valid span data" do
       spans = [
         %{
-          trace_id: 123456789,
-          span_id: 987654321,
+          trace_id: 123_456_789,
+          span_id: 987_654_321,
           parent_id: nil,
           name: "test.span",
           service: "test-service",
           resource: "test-resource",
           type: "custom",
-          start: 1640995200000000000,
-          duration: 50000000,
+          start: 1_640_995_200_000_000_000,
+          duration: 50_000_000,
           error: 0,
           meta: %{},
           metrics: %{}
@@ -154,7 +154,7 @@ defmodule OpentelemetryDatadog.V05.ExporterTest do
 
       # Mock mappers that just pass through
       mappers = []
-      
+
       result = Exporter.apply_mappers(mappers, span, nil, %{})
       assert result == span
     end
@@ -172,7 +172,7 @@ defmodule OpentelemetryDatadog.V05.ExporterTest do
       end
 
       mappers = [{TestMapper, []}]
-      
+
       result = Exporter.apply_mappers(mappers, span, nil, %{})
       assert result == nil
     end
@@ -201,7 +201,7 @@ defmodule OpentelemetryDatadog.V05.ExporterTest do
   describe "configuration error handling" do
     test "handles invalid port configuration gracefully" do
       invalid_port_config()
-      
+
       # The exporter itself doesn't validate config, but we can test that
       # the configuration loading fails appropriately
       assert {:error, :invalid_config, _} = OpentelemetryDatadog.Config.load()
@@ -209,7 +209,7 @@ defmodule OpentelemetryDatadog.V05.ExporterTest do
 
     test "handles missing required configuration" do
       missing_required_host_config()
-      
+
       assert {:error, :missing_required_config, _} = OpentelemetryDatadog.Config.load()
     end
 
@@ -217,14 +217,14 @@ defmodule OpentelemetryDatadog.V05.ExporterTest do
       # Use one of the valid configurations from TestFixtures
       valid_configs = OpentelemetryDatadog.TestFixtures.valid_configs()
       config = Enum.at(valid_configs, 0)
-      
+
       # Convert to the format expected by the exporter
       exporter_config = [
         host: config.host,
         port: config.port,
         protocol: :v05
       ]
-      
+
       assert {:ok, state} = Exporter.init(exporter_config)
       assert state.host == config.host
       assert state.port == config.port

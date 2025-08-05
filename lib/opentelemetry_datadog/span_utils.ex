@@ -17,11 +17,11 @@ defmodule OpentelemetryDatadog.SpanUtils do
 
   @doc """
   Converts OpenTelemetry trace ID to Datadog format.
-  
+
   Takes a 128-bit trace ID and returns the upper 64 bits as required by Datadog.
-  
+
   ## Examples
-  
+
       iex> OpentelemetryDatadog.SpanUtils.id_to_datadog_id(nil)
       nil
       
@@ -32,6 +32,7 @@ defmodule OpentelemetryDatadog.SpanUtils do
   """
   @spec id_to_datadog_id(integer() | nil) :: integer() | nil
   def id_to_datadog_id(nil), do: nil
+
   def id_to_datadog_id(trace_id) do
     <<upper::integer-size(64), _lower::integer-size(64)>> = <<trace_id::integer-size(128)>>
     upper
@@ -39,9 +40,9 @@ defmodule OpentelemetryDatadog.SpanUtils do
 
   @doc """
   Extracts service name from resource map.
-  
+
   ## Examples
-  
+
       iex> data = %{resource_map: %{"service.name" => "my-service"}}
       iex> OpentelemetryDatadog.SpanUtils.get_service_from_resource(data)
       "my-service"
@@ -60,9 +61,9 @@ defmodule OpentelemetryDatadog.SpanUtils do
 
   @doc """
   Extracts environment from resource map.
-  
+
   ## Examples
-  
+
       iex> data = %{resource_map: %{"deployment.environment" => "production"}}
       iex> OpentelemetryDatadog.SpanUtils.get_env_from_resource(data)
       "production"
@@ -81,12 +82,12 @@ defmodule OpentelemetryDatadog.SpanUtils do
 
   @doc """
   Builds resource name from span name and metadata.
-  
+
   Tries to create a meaningful resource name from HTTP attributes,
   falls back to span name.
-  
+
   ## Examples
-  
+
       iex> meta = %{"http.method" => "GET", "http.route" => "/api/users"}
       iex> OpentelemetryDatadog.SpanUtils.get_resource_from_span("web.request", meta)
       "GET /api/users"
@@ -105,9 +106,9 @@ defmodule OpentelemetryDatadog.SpanUtils do
 
   @doc """
   Maps OpenTelemetry span kind to Datadog span type.
-  
+
   ## Examples
-  
+
       iex> OpentelemetryDatadog.SpanUtils.get_type_from_span("server")
       "web"
       
@@ -131,12 +132,12 @@ defmodule OpentelemetryDatadog.SpanUtils do
 
   @doc """
   Gets container ID from cgroup file.
-  
+
   Reads /proc/self/cgroup and extracts container ID using regex patterns
   for different container runtimes.
-  
+
   ## Examples
-  
+
       iex> OpentelemetryDatadog.SpanUtils.get_container_id()
       nil  # or container ID string if running in container
   """
@@ -145,11 +146,12 @@ defmodule OpentelemetryDatadog.SpanUtils do
     cgroup_uuid = "[0-9a-f]{8}[-_][0-9a-f]{4}[-_][0-9a-f]{4}[-_][0-9a-f]{4}[-_][0-9a-f]{12}"
     cgroup_ctnr = "[0-9a-f]{64}"
     cgroup_task = "[0-9a-f]{32}-\\d+"
-    
-    cgroup_regex = Regex.compile!(
-      ".*(#{cgroup_uuid}|#{cgroup_ctnr}|#{cgroup_task})(?:\\.scope)?$",
-      "m"
-    )
+
+    cgroup_regex =
+      Regex.compile!(
+        ".*(#{cgroup_uuid}|#{cgroup_ctnr}|#{cgroup_task})(?:\\.scope)?$",
+        "m"
+      )
 
     with {:ok, file_binary} <- File.read("/proc/self/cgroup"),
          [_, container_id] <- Regex.run(cgroup_regex, file_binary) do

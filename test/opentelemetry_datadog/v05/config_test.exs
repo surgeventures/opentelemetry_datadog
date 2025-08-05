@@ -1,15 +1,15 @@
 defmodule OpentelemetryDatadog.V05.ConfigTest do
   use ExUnit.Case, async: true
   use OpentelemetryDatadog.TestHelpers
-  
+
   alias OpentelemetryDatadog.V05.Config
 
   describe "to_v05_exporter_config/1" do
     test "adds v05 protocol to keyword list config" do
       config = [host: "localhost", port: 8126, service: "my-service"]
-      
+
       result = Config.to_v05_exporter_config(config)
-      
+
       assert result[:protocol] == :v05
       assert result[:host] == "localhost"
       assert result[:port] == 8126
@@ -18,9 +18,9 @@ defmodule OpentelemetryDatadog.V05.ConfigTest do
 
     test "converts map config to keyword list with v05 protocol" do
       config = %{host: "localhost", port: 8126, service: "my-service"}
-      
+
       result = Config.to_v05_exporter_config(config)
-      
+
       assert result[:protocol] == :v05
       assert result[:host] == "localhost"
       assert result[:port] == 8126
@@ -29,9 +29,9 @@ defmodule OpentelemetryDatadog.V05.ConfigTest do
 
     test "overwrites existing protocol setting" do
       config = [host: "localhost", port: 8126, protocol: :v04]
-      
+
       result = Config.to_v05_exporter_config(config)
-      
+
       assert result[:protocol] == :v05
     end
   end

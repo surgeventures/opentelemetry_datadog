@@ -1,7 +1,7 @@
 defmodule OpentelemetryDatadog.SpanUtilsTest do
   use ExUnit.Case, async: true
   doctest OpentelemetryDatadog.SpanUtils
-  
+
   alias OpentelemetryDatadog.SpanUtils
 
   describe "term_to_string/1" do
@@ -48,8 +48,9 @@ defmodule OpentelemetryDatadog.SpanUtilsTest do
     test "extracts upper 64 bits from 128-bit trace ID" do
       # Use the same example as in doctest
       trace_id = 0x123456789ABCDEF0FEDCBA0987654321
-      expected_upper = 1311768467463790320  # This is the actual upper 64 bits
-      
+      # This is the actual upper 64 bits
+      expected_upper = 1_311_768_467_463_790_320
+
       result = SpanUtils.id_to_datadog_id(trace_id)
       assert result == expected_upper
     end
