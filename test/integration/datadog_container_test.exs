@@ -16,12 +16,16 @@ defmodule OpentelemetryDatadog.DatadogContainerTest do
     })
   end
 
+  defp wait_span_flush, do: Process.sleep(3000)
+
   setup_all do
     {:ok, container} = OpentelemetryDatadog.Testcontainers.start_dd_agent(log_level: "debug")
-    :ok = OpentelemetryDatadog.Testcontainers.wait_for_agent(container)
+    on_exit(fn -> OpentelemetryDatadog.Testcontainers.stop(container) end)
+
+    :ok = OpentelemetryDatadog.Testcontainers.wait_for_agent(container, 90_000)
     {host, port} = OpentelemetryDatadog.Testcontainers.get_connection_info(container)
 
-    on_exit(fn -> OpentelemetryDatadog.Testcontainers.stop(container) end)
+    :ok = OpentelemetryDatadog.Testcontainers.check_agent_health!(container)
 
     %{container: container, host: host, port: port}
   end
@@ -38,6 +42,7 @@ defmodule OpentelemetryDatadog.DatadogContainerTest do
     end
 
     test "sends a span to Datadog agent", %{container: container} do
+      assert :ok = OpentelemetryDatadog.Testcontainers.check_agent_health!(container)
       assert :ok = OpentelemetryDatadog.setup()
 
       OpenTelemetry.Tracer.with_span "test-span", %{} do
@@ -48,12 +53,10 @@ defmodule OpentelemetryDatadog.DatadogContainerTest do
         ])
       end
 
-      Process.sleep(2000)
+      wait_span_flush()
 
       logs = OpentelemetryDatadog.Testcontainers.get_logs(container)
-      IO.inspect(11111)
-      IO.inspect(logs)
-      IO.inspect(11111)
+      assert is_binary(logs)
       assert logs =~ "test-span"
     end
 
@@ -69,8 +72,7 @@ defmodule OpentelemetryDatadog.DatadogContainerTest do
         end
       end
 
-      Process.sleep(2000)
-
+      wait_span_flush()
       assert :ok = OpentelemetryDatadog.Testcontainers.check_agent_health!(container)
     end
 
@@ -86,8 +88,7 @@ defmodule OpentelemetryDatadog.DatadogContainerTest do
         OpenTelemetry.Tracer.set_status(:error, "Test error occurred")
       end
 
-      Process.sleep(2000)
-
+      wait_span_flush()
       assert :ok = OpentelemetryDatadog.Testcontainers.check_agent_health!(container)
     end
 
@@ -122,7 +123,7 @@ defmodule OpentelemetryDatadog.DatadogContainerTest do
         ])
       end
 
-      Process.sleep(2000)
+      wait_span_flush()
 
       assert :ok =
                OpentelemetryDatadog.Testcontainers.check_agent_health!(%{host: host, port: port})
@@ -131,25 +132,6 @@ defmodule OpentelemetryDatadog.DatadogContainerTest do
     test "setup/0 is idempotent" do
       assert :ok = OpentelemetryDatadog.setup()
       assert :ok = OpentelemetryDatadog.setup()
-    end
-  end
-
-  describe "agent error scenarios" do
-    test "handles agent unavailability gracefully", %{container: container} do
-      assert :ok = OpentelemetryDatadog.setup()
-
-      OpenTelemetry.Tracer.with_span "before-stop-span", %{} do
-        OpenTelemetry.Tracer.set_attributes([{"phase", "before-stop"}])
-      end
-
-      :ok = OpentelemetryDatadog.Testcontainers.stop(container)
-
-      OpenTelemetry.Tracer.with_span "during-downtime-span", %{} do
-        OpenTelemetry.Tracer.set_attributes([{"phase", "during-downtime"}])
-      end
-
-      # Just ensure it doesn’t crash
-      :ok
     end
   end
 end

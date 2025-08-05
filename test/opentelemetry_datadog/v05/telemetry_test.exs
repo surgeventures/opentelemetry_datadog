@@ -144,14 +144,14 @@ defmodule OpentelemetryDatadog.V05.TelemetryTest do
       ]
       |> Enum.with_index()
       |> Enum.each(fn
-        {{[:start, sc], attr}, idx} ->
+        {{[:start, sc], _attr}, idx} ->
           {event, meas, meta} = Enum.at(events, idx)
           assert event == Enum.at(@telemetry_events, idx)
           assert meas.span_count == sc
           assert meta.endpoint == "/v0.5/traces"
 
-        {{[:stop, sc], attr}, idx} ->
-          {event, meas, meta} = Enum.at(events, idx)
+        {{[:stop, sc], _attr}, idx} ->
+          {_event, meas, meta} = Enum.at(events, idx)
           assert meas.status_code == 200
           assert meas.span_count == sc
           assert meta.endpoint == "/v0.5/traces"
