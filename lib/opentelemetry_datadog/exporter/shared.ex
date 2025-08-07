@@ -106,14 +106,15 @@ defmodule OpentelemetryDatadog.Exporter.Shared do
   end
 
   @doc """
-  Calculates retry delay with exponential backoff and jitter.
+  Calculates retry delay with exponential backoff and equal jitter.
 
-  Uses 3 retries with 10% jitter.
-  Example delays: 484ms, 945ms, 1908ms
+  Uses fixed base delays: 100ms, 200ms, 400ms with equal jitter.
+  This function is kept for backward compatibility with Req's retry mechanism.
+  For new implementations, use OpentelemetryDatadog.Retry.retry_delay/1.
   """
   @spec retry_delay(non_neg_integer()) :: non_neg_integer()
   def retry_delay(attempt) do
-    trunc(Integer.pow(2, attempt) * 500 * (1 - 0.1 * :rand.uniform()))
+    OpentelemetryDatadog.Retry.retry_delay(attempt)
   end
 
   @doc """

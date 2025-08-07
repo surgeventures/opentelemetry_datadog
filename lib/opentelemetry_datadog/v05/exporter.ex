@@ -40,7 +40,7 @@ defmodule OpentelemetryDatadog.V05.Exporter do
     ]
   end
 
-  alias OpentelemetryDatadog.{Mapper, SpanUtils}
+  alias OpentelemetryDatadog.{Mapper, SpanUtils, Retry}
   alias OpentelemetryDatadog.V05.Encoder
   alias OpentelemetryDatadog.Exporter.Shared
   alias OpentelemetryDatadog.SpanProcessor
@@ -202,14 +202,14 @@ defmodule OpentelemetryDatadog.V05.Exporter do
   end
 
   def push_v05(body, headers, %State{host: host, port: port}) do
-    Req.put(
-      "#{host}:#{port}/v0.5/traces",
-      body: body,
-      headers: headers,
-      retry: :transient,
-      retry_delay: &Shared.retry_delay/1,
-      retry_log_level: false
-    )
+    Retry.with_retry(fn ->
+      Req.put(
+        "#{host}:#{port}/v0.5/traces",
+        body: body,
+        headers: headers,
+        retry: false
+      )
+    end)
   end
 
   def format_span_v05(span_record, data, state) do

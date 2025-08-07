@@ -87,18 +87,27 @@ defmodule OpentelemetryDatadog.Exporter.SharedTest do
   end
 
   describe "retry_delay/1" do
-    test "calculates exponential backoff with jitter" do
-      delay1 = Shared.retry_delay(1)
-      delay2 = Shared.retry_delay(2)
-      delay3 = Shared.retry_delay(3)
+    test "calculates retry delays with equal jitter" do
+      for _i <- 1..5 do
+        delay1 = Shared.retry_delay(1)
+        delay2 = Shared.retry_delay(2)
+        delay3 = Shared.retry_delay(3)
 
-      assert delay1 > 0
-      assert delay2 > delay1
-      assert delay3 > delay2
+        assert delay1 >= 50 and delay1 <= 150
+        assert delay2 >= 100 and delay2 <= 300
+        assert delay3 >= 200 and delay3 <= 600
+      end
+    end
 
-      assert delay1 < 2000
-      assert delay2 < 4000
-      assert delay3 < 8000
+    test "delegates to Retry module" do
+      shared_delay1 = Shared.retry_delay(1)
+      retry_delay1 = OpentelemetryDatadog.Retry.retry_delay(1)
+
+      assert shared_delay1 >= 50 and shared_delay1 <= 150
+      assert retry_delay1 >= 50 and retry_delay1 <= 150
+
+      assert Shared.retry_delay(0) == 0
+      assert OpentelemetryDatadog.Retry.retry_delay(0) == 0
     end
   end
 end
