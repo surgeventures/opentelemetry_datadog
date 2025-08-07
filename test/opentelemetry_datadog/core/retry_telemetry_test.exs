@@ -1,10 +1,10 @@
-defmodule OpentelemetryDatadog.RetryTelemetryTest do
+defmodule OpentelemetryDatadog.Core.RetryTelemetryTest do
   use ExUnit.Case, async: true
   import ExUnit.CaptureLog
 
   @moduletag :unit
 
-  alias OpentelemetryDatadog.Retry
+  alias OpentelemetryDatadog.Core.Retry
 
   @telemetry_events [
     [:opentelemetry_datadog, :retry, :start],

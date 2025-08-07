@@ -1,4 +1,4 @@
-defmodule OpentelemetryDatadog.Retry do
+defmodule OpentelemetryDatadog.Core.Retry do
   @moduledoc """
   Retry helper with exponential backoff and jitter for exporting spans to Datadog.
 
@@ -72,15 +72,15 @@ defmodule OpentelemetryDatadog.Retry do
 
   ## Examples
 
-      iex> delay = OpentelemetryDatadog.Retry.retry_delay(1)
+      iex> delay = OpentelemetryDatadog.Core.Retry.retry_delay(1)
       iex> delay >= 50 and delay <= 150
       true
 
-      iex> delay = OpentelemetryDatadog.Retry.retry_delay(2)
+      iex> delay = OpentelemetryDatadog.Core.Retry.retry_delay(2)
       iex> delay >= 100 and delay <= 300
       true
 
-      iex> delay = OpentelemetryDatadog.Retry.retry_delay(3)
+      iex> delay = OpentelemetryDatadog.Core.Retry.retry_delay(3)
       iex> delay >= 200 and delay <= 600
       true
   """

@@ -110,11 +110,11 @@ defmodule OpentelemetryDatadog.Exporter.Shared do
 
   Uses fixed base delays: 100ms, 200ms, 400ms with equal jitter.
   This function is kept for backward compatibility with Req's retry mechanism.
-  For new implementations, use OpentelemetryDatadog.Retry.retry_delay/1.
+  For new implementations, use OpentelemetryDatadog.Core.Retry.retry_delay/1.
   """
   @spec retry_delay(non_neg_integer()) :: non_neg_integer()
   def retry_delay(attempt) do
-    OpentelemetryDatadog.Retry.retry_delay(attempt)
+    OpentelemetryDatadog.Core.Retry.retry_delay(attempt)
   end
 
   @doc """

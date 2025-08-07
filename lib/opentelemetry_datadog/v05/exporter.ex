@@ -40,7 +40,8 @@ defmodule OpentelemetryDatadog.V05.Exporter do
     ]
   end
 
-  alias OpentelemetryDatadog.{Mapper, SpanUtils, Retry}
+  alias OpentelemetryDatadog.{Mapper, SpanUtils}
+  alias OpentelemetryDatadog.Core.Retry
   alias OpentelemetryDatadog.V05.Encoder
   alias OpentelemetryDatadog.Exporter.Shared
   alias OpentelemetryDatadog.SpanProcessor

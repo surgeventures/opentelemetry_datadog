@@ -1,10 +1,10 @@
-defmodule OpentelemetryDatadog.RetryTest do
+defmodule OpentelemetryDatadog.Core.RetryTest do
   use ExUnit.Case, async: true
   import ExUnit.CaptureLog
 
   @moduletag :unit
 
-  alias OpentelemetryDatadog.Retry
+  alias OpentelemetryDatadog.Core.Retry
 
   describe "retryable?/1" do
     test "returns true for HTTP 429" do

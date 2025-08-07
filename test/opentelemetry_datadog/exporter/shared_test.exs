@@ -101,13 +101,13 @@ defmodule OpentelemetryDatadog.Exporter.SharedTest do
 
     test "delegates to Retry module" do
       shared_delay1 = Shared.retry_delay(1)
-      retry_delay1 = OpentelemetryDatadog.Retry.retry_delay(1)
+      retry_delay1 = OpentelemetryDatadog.Core.Retry.retry_delay(1)
 
       assert shared_delay1 >= 50 and shared_delay1 <= 150
       assert retry_delay1 >= 50 and retry_delay1 <= 150
 
       assert Shared.retry_delay(0) == 0
-      assert OpentelemetryDatadog.Retry.retry_delay(0) == 0
+      assert OpentelemetryDatadog.Core.Retry.retry_delay(0) == 0
     end
   end
 end
