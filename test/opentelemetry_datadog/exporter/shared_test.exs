@@ -1,10 +1,10 @@
 defmodule OpentelemetryDatadog.Exporter.SharedTest do
   use ExUnit.Case, async: true
 
-  @moduletag :unit
-
   alias OpentelemetryDatadog.Exporter.Shared
   alias OpentelemetryDatadog.DatadogSpan
+
+  @moduletag :unit
 
   describe "deep_remove_nils/1" do
     test "removes nil values from maps" do

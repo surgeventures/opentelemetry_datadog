@@ -28,7 +28,8 @@ defmodule OpentelemetryDatadog.Exporter do
       :port,
       :service_name,
       :container_id,
-      :timeout_ms
+      :timeout_ms,
+      :connect_timeout_ms
     ]
   end
 
@@ -49,7 +50,8 @@ defmodule OpentelemetryDatadog.Exporter do
       host: Keyword.fetch!(config, :host),
       port: Keyword.fetch!(config, :port),
       container_id: SpanUtils.get_container_id(),
-      timeout_ms: Keyword.get(config, :timeout_ms, 2000)
+      timeout_ms: Keyword.get(config, :timeout_ms, 2000),
+      connect_timeout_ms: Keyword.get(config, :connect_timeout_ms, 500)
     }
 
     {:ok, state}
@@ -104,19 +106,26 @@ defmodule OpentelemetryDatadog.Exporter do
     |> Msgpax.pack!(data)
   end
 
-  def push(body, headers, %State{host: host, port: port, timeout_ms: timeout_ms}) do
+  def push(body, headers, %State{
+        host: host,
+        port: port,
+        timeout_ms: timeout_ms,
+        connect_timeout_ms: connect_timeout_ms
+      }) do
     Logger.debug(
-      "Datadog export request: #{host}:#{port}/v0.4/traces (timeout: #{timeout_ms}ms)"
+      "Datadog export request: #{host}:#{port}/v0.4/traces (timeout: #{timeout_ms}ms, connect_timeout: #{connect_timeout_ms}ms)"
     )
 
     Retry.with_retry_attempt(fn attempt ->
-      result = Req.put(
-        "#{host}:#{port}/v0.4/traces",
-        body: body,
-        headers: headers,
-        retry: false,
-        receive_timeout: timeout_ms
-      )
+      result =
+        Req.put(
+          "http://#{host}:#{port}/v0.4/traces",
+          body: body,
+          headers: headers,
+          retry: false,
+          receive_timeout: timeout_ms,
+          connect_options: [timeout: connect_timeout_ms]
+        )
 
       case result do
         {:error, %Mint.TransportError{reason: :timeout}} ->
@@ -134,6 +143,16 @@ defmodule OpentelemetryDatadog.Exporter do
           emit_timeout_telemetry(timeout_ms, attempt)
           result
 
+        {:error, %Mint.TransportError{reason: :connect_timeout}} ->
+          Logger.warning("Datadog export failed due to connect timeout (#{connect_timeout_ms}ms)")
+          emit_connect_timeout_telemetry(connect_timeout_ms, attempt)
+          result
+
+        {:error, %Mint.HTTPError{reason: :connect_timeout}} ->
+          Logger.warning("Datadog export failed due to connect timeout (#{connect_timeout_ms}ms)")
+          emit_connect_timeout_telemetry(connect_timeout_ms, attempt)
+          result
+
         _ ->
           result
       end
@@ -145,6 +164,14 @@ defmodule OpentelemetryDatadog.Exporter do
       [:opentelemetry_datadog, :export, :timeout],
       %{count: 1},
       %{timeout_ms: timeout_ms, attempt: attempt}
+    )
+  end
+
+  defp emit_connect_timeout_telemetry(connect_timeout_ms, attempt) do
+    :telemetry.execute(
+      [:opentelemetry_datadog, :export, :connect_timeout],
+      %{count: 1},
+      %{connect_timeout_ms: connect_timeout_ms, attempt: attempt}
     )
   end
 

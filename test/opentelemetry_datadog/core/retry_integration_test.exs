@@ -1,10 +1,11 @@
 defmodule OpentelemetryDatadog.Core.RetryIntegrationTest do
   use ExUnit.Case, async: true
+
   import ExUnit.CaptureLog
 
-  @moduletag :integration
-
   alias OpentelemetryDatadog.Core.Retry
+
+  @moduletag :integration
 
   describe "retry integration with HTTP requests" do
     test "retries with correct timing and logging" do

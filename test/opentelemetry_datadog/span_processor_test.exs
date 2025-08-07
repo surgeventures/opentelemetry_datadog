@@ -1,9 +1,9 @@
 defmodule OpentelemetryDatadog.SpanProcessorTest do
   use ExUnit.Case, async: true
 
-  @moduletag :unit
-
   alias OpentelemetryDatadog.SpanProcessor
+
+  @moduletag :unit
 
   describe "SpanProcessor protocol" do
     test "V04 processor struct exists" do

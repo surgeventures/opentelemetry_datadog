@@ -1,9 +1,11 @@
 defmodule OpentelemetryDatadog.TimeoutIntegrationTest do
   use ExUnit.Case, async: false
-  @moduletag :integration
 
   import OpentelemetryDatadog.TestHelpers
+
   alias OpentelemetryDatadog.{Config, Exporter}
+
+  @moduletag :integration
 
   setup do
     reset_env()

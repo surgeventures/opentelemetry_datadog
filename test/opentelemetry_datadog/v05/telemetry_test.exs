@@ -1,9 +1,9 @@
 defmodule OpentelemetryDatadog.V05.TelemetryTest do
   use ExUnit.Case, async: true
 
-  @moduletag :unit
-
   alias OpentelemetryDatadog.V05.Exporter
+
+  @moduletag :unit
 
   @telemetry_events [
     [:opentelemetry_datadog, :export, :start],

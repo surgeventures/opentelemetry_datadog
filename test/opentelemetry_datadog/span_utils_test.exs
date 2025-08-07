@@ -1,8 +1,9 @@
 defmodule OpentelemetryDatadog.SpanUtilsTest do
   use ExUnit.Case, async: true
-  doctest OpentelemetryDatadog.SpanUtils
 
   alias OpentelemetryDatadog.SpanUtils
+
+  doctest OpentelemetryDatadog.SpanUtils
 
   describe "term_to_string/1" do
     test "converts boolean to string" do

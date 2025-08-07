@@ -1,5 +1,6 @@
 defmodule OpentelemetryDatadog.TestHelpersTest do
   use ExUnit.Case, async: false
+
   import OpentelemetryDatadog.TestHelpers
 
   @moduletag :test_helpers
