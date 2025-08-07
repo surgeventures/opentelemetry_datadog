@@ -37,6 +37,13 @@ defmodule OpentelemetryDatadog.Config.Parser do
     end
   end
 
+  defp convert_type(value, :integer, "DD_EXPORT_TIMEOUT_MS") do
+    case Integer.parse(value) do
+      {int, ""} -> {:ok, int}
+      _ -> {:error, :invalid_config, "DD_EXPORT_TIMEOUT_MS must be a positive integer"}
+    end
+  end
+
   defp convert_type(value, :integer, env_var_name) do
     case Integer.parse(value) do
       {int, ""} -> {:ok, int}

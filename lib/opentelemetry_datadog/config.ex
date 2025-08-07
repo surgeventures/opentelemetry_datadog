@@ -34,7 +34,8 @@ defmodule OpentelemetryDatadog.Config do
     :version,
     :env,
     :tags,
-    :sample_rate
+    :sample_rate,
+    :timeout_ms
   ]
 
   @type t :: %__MODULE__{
@@ -44,7 +45,8 @@ defmodule OpentelemetryDatadog.Config do
           version: String.t() | nil,
           env: String.t() | nil,
           tags: map() | nil,
-          sample_rate: float() | nil
+          sample_rate: float() | nil,
+          timeout_ms: pos_integer()
         }
 
   @type validation_error :: {:error, :missing_required_config | :invalid_config, String.t()}
@@ -55,7 +57,8 @@ defmodule OpentelemetryDatadog.Config do
     with {:ok, host} <- get_required_env("DD_AGENT_HOST"),
          {:ok, port} <- get_port(),
          {:ok, sample_rate} <- get_sample_rate(),
-         {:ok, tags} <- get_tags() do
+         {:ok, tags} <- get_tags(),
+         {:ok, timeout_ms} <- get_timeout_ms() do
       config = %__MODULE__{
         host: host,
         port: port,
@@ -63,7 +66,8 @@ defmodule OpentelemetryDatadog.Config do
         version: get_version(),
         env: get_environment(),
         tags: tags,
-        sample_rate: sample_rate
+        sample_rate: sample_rate,
+        timeout_ms: timeout_ms
       }
 
       {:ok, config}
@@ -93,7 +97,8 @@ defmodule OpentelemetryDatadog.Config do
     with :ok <- validate_required(config, :host, "host is required"),
          :ok <- validate_required(config, :port, "port is required"),
          :ok <- validate_port(config[:port]),
-         :ok <- validate_sample_rate(config[:sample_rate]) do
+         :ok <- validate_sample_rate(config[:sample_rate]),
+         :ok <- validate_timeout_ms(config[:timeout_ms]) do
       :ok
     end
   end
@@ -136,6 +141,14 @@ defmodule OpentelemetryDatadog.Config do
     Parser.get_env("DD_TRACE_SAMPLE_RATE", :float,
       default: DatadogConstants.default(:sample_rate),
       validate: &validate_sample_rate_env/1
+    )
+  end
+
+  @spec get_timeout_ms() :: {:ok, pos_integer()} | validation_error()
+  defp get_timeout_ms do
+    Parser.get_env("DD_EXPORT_TIMEOUT_MS", :integer,
+      default: DatadogConstants.default(:timeout_ms),
+      validate: &validate_timeout_ms_env/1
     )
   end
 
@@ -235,6 +248,13 @@ defmodule OpentelemetryDatadog.Config do
   defp validate_sample_rate(_),
     do: {:error, :invalid_config, "sample_rate must be a float between 0.0 and 1.0"}
 
+  @spec validate_timeout_ms(any()) :: :ok | validation_error()
+  defp validate_timeout_ms(nil), do: :ok
+  defp validate_timeout_ms(timeout) when is_integer(timeout) and timeout > 0, do: :ok
+
+  defp validate_timeout_ms(_),
+    do: {:error, :invalid_config, "timeout_ms must be a positive integer"}
+
   @spec validate_port_env(any()) :: :ok | validation_error()
   defp validate_port_env(port) when is_integer(port) and port > 0 and port <= 65535, do: :ok
 
@@ -247,4 +267,10 @@ defmodule OpentelemetryDatadog.Config do
 
   defp validate_sample_rate_env(_),
     do: {:error, :invalid_config, "DD_TRACE_SAMPLE_RATE must be a float between 0.0 and 1.0"}
+
+  @spec validate_timeout_ms_env(any()) :: :ok | validation_error()
+  defp validate_timeout_ms_env(timeout) when is_integer(timeout) and timeout > 0, do: :ok
+
+  defp validate_timeout_ms_env(_),
+    do: {:error, :invalid_config, "DD_EXPORT_TIMEOUT_MS must be a positive integer"}
 end

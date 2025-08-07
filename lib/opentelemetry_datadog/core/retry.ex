@@ -147,6 +147,28 @@ defmodule OpentelemetryDatadog.Core.Retry do
     execute_with_retry(request_fn, 1, max_attempts, log_level, retry_id)
   end
 
+  @doc """
+  Executes a request function with retry logic, passing the current attempt number.
+
+  Similar to `with_retry/2`, but the request function receives the current attempt number
+  as its first argument. This allows the request function to emit telemetry events
+  or perform other attempt-specific logic.
+
+  ## Examples
+
+      iex> request_fn = fn _attempt -> {:ok, "success"} end
+      iex> OpentelemetryDatadog.Core.Retry.with_retry_attempt(request_fn)
+      {:ok, "success"}
+  """
+  @spec with_retry_attempt((pos_integer() -> term()), keyword()) :: term()
+  def with_retry_attempt(request_fn, opts \\ []) do
+    max_attempts = Keyword.get(opts, :max_attempts, @max_attempts)
+    log_level = Keyword.get(opts, :log_level, :info)
+    retry_id = :erlang.unique_integer([:positive])
+
+    execute_with_retry_attempt(request_fn, 1, max_attempts, log_level, retry_id)
+  end
+
   defp execute_with_retry(request_fn, attempt, max_attempts, log_level, retry_id) do
     if attempt == 1 do
       :telemetry.execute(
@@ -181,6 +203,96 @@ defmodule OpentelemetryDatadog.Core.Retry do
 
           Process.sleep(delay)
           execute_with_retry(request_fn, attempt + 1, max_attempts, log_level, retry_id)
+
+        {true, false} ->
+          reason = retry_reason(response)
+
+          :telemetry.execute(
+            [:opentelemetry_datadog, :retry, :stop],
+            %{duration: duration, total_attempts: attempt},
+            %{result: :failed, reason: reason, max_attempts: max_attempts, retry_id: retry_id}
+          )
+
+          Logger.log(
+            log_level,
+            "Datadog export failed after #{max_attempts} attempts: #{reason}. " <>
+              "Final attempt took #{duration}ms"
+          )
+
+          response
+
+        {false, _} ->
+          :telemetry.execute(
+            [:opentelemetry_datadog, :retry, :stop],
+            %{duration: duration, total_attempts: attempt},
+            %{result: :success, max_attempts: max_attempts, retry_id: retry_id}
+          )
+
+          if attempt > 1 do
+            Logger.log(
+              log_level,
+              "Datadog export succeeded on attempt #{attempt}/#{max_attempts} " <>
+                "(took #{duration}ms)"
+            )
+          end
+
+          response
+      end
+    rescue
+      exception ->
+        duration = System.monotonic_time(:millisecond) - start_time
+
+        :telemetry.execute(
+          [:opentelemetry_datadog, :retry, :exception],
+          %{duration: duration},
+          %{
+            kind: exception.__struct__,
+            reason: Exception.message(exception),
+            stacktrace: __STACKTRACE__,
+            attempt: attempt,
+            max_attempts: max_attempts,
+            retry_id: retry_id
+          }
+        )
+
+        reraise exception, __STACKTRACE__
+    end
+  end
+
+  defp execute_with_retry_attempt(request_fn, attempt, max_attempts, log_level, retry_id) do
+    if attempt == 1 do
+      :telemetry.execute(
+        [:opentelemetry_datadog, :retry, :start],
+        %{system_time: System.system_time()},
+        %{max_attempts: max_attempts, retry_id: retry_id}
+      )
+    end
+
+    start_time = System.monotonic_time(:millisecond)
+
+    try do
+      response = request_fn.(attempt)
+      duration = System.monotonic_time(:millisecond) - start_time
+
+      case {should_retry?(response), attempt < max_attempts} do
+        {true, true} ->
+          reason = retry_reason(response)
+          delay = retry_delay(attempt)
+
+          :telemetry.execute(
+            [:opentelemetry_datadog, :retry, :attempt],
+            %{duration: duration, delay: delay},
+            %{attempt: attempt, max_attempts: max_attempts, reason: reason, retry_id: retry_id}
+          )
+
+          Logger.log(
+            log_level,
+            "Datadog export retry #{attempt}/#{max_attempts}: #{reason}. " <>
+              "Retrying in #{delay}ms (request took #{duration}ms)"
+          )
+
+          Process.sleep(delay)
+          execute_with_retry_attempt(request_fn, attempt + 1, max_attempts, log_level, retry_id)
 
         {true, false} ->
           reason = retry_reason(response)

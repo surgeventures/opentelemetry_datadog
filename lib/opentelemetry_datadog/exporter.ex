@@ -1,6 +1,7 @@
 defmodule OpentelemetryDatadog.Exporter do
   @behaviour :otel_exporter
 
+  require Logger
   require Record
   @deps_dir Mix.Project.deps_path()
   Record.defrecord(
@@ -26,7 +27,8 @@ defmodule OpentelemetryDatadog.Exporter do
       :host,
       :port,
       :service_name,
-      :container_id
+      :container_id,
+      :timeout_ms
     ]
   end
 
@@ -46,7 +48,8 @@ defmodule OpentelemetryDatadog.Exporter do
     state = %State{
       host: Keyword.fetch!(config, :host),
       port: Keyword.fetch!(config, :port),
-      container_id: SpanUtils.get_container_id()
+      container_id: SpanUtils.get_container_id(),
+      timeout_ms: Keyword.get(config, :timeout_ms, 2000)
     }
 
     {:ok, state}
@@ -101,15 +104,48 @@ defmodule OpentelemetryDatadog.Exporter do
     |> Msgpax.pack!(data)
   end
 
-  def push(body, headers, %State{host: host, port: port}) do
-    Retry.with_retry(fn ->
-      Req.put(
+  def push(body, headers, %State{host: host, port: port, timeout_ms: timeout_ms}) do
+    Logger.debug(
+      "Datadog export request: #{host}:#{port}/v0.4/traces (timeout: #{timeout_ms}ms)"
+    )
+
+    Retry.with_retry_attempt(fn attempt ->
+      result = Req.put(
         "#{host}:#{port}/v0.4/traces",
         body: body,
         headers: headers,
-        retry: false
+        retry: false,
+        receive_timeout: timeout_ms
       )
+
+      case result do
+        {:error, %Mint.TransportError{reason: :timeout}} ->
+          Logger.warning("Datadog export failed due to timeout (#{timeout_ms}ms)")
+          emit_timeout_telemetry(timeout_ms, attempt)
+          result
+
+        {:error, %Mint.HTTPError{reason: :timeout}} ->
+          Logger.warning("Datadog export failed due to timeout (#{timeout_ms}ms)")
+          emit_timeout_telemetry(timeout_ms, attempt)
+          result
+
+        {:error, :timeout} ->
+          Logger.warning("Datadog export failed due to timeout (#{timeout_ms}ms)")
+          emit_timeout_telemetry(timeout_ms, attempt)
+          result
+
+        _ ->
+          result
+      end
     end)
+  end
+
+  defp emit_timeout_telemetry(timeout_ms, attempt) do
+    :telemetry.execute(
+      [:opentelemetry_datadog, :export, :timeout],
+      %{count: 1},
+      %{timeout_ms: timeout_ms, attempt: attempt}
+    )
   end
 
   def format_span(span_record, data, state) do
