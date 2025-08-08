@@ -116,47 +116,46 @@ defmodule OpentelemetryDatadog.Exporter do
       "Datadog export request: #{host}:#{port}/v0.4/traces (timeout: #{timeout_ms}ms, connect_timeout: #{connect_timeout_ms}ms)"
     )
 
-    Retry.with_retry_attempt(fn attempt ->
-      result =
-        Req.put(
-          "http://#{host}:#{port}/v0.4/traces",
-          body: body,
-          headers: headers,
-          retry: false,
-          receive_timeout: timeout_ms,
-          connect_options: [timeout: connect_timeout_ms]
-        )
+    Retry.with_retry_attempt(
+      fn attempt ->
+        result =
+          Req.put(
+            "http://#{host}:#{port}/v0.4/traces",
+            body: body,
+            headers: headers,
+            retry: false,
+            receive_timeout: timeout_ms,
+            connect_options: [timeout: connect_timeout_ms]
+          )
 
-      case result do
-        {:error, %Mint.TransportError{reason: :timeout}} ->
-          Logger.warning("Datadog export failed due to timeout (#{timeout_ms}ms)")
-          emit_timeout_telemetry(timeout_ms, attempt)
-          result
+        case result do
+          {:error, %Mint.TransportError{reason: :timeout}} ->
+            emit_timeout_telemetry(timeout_ms, attempt)
+            result
 
-        {:error, %Mint.HTTPError{reason: :timeout}} ->
-          Logger.warning("Datadog export failed due to timeout (#{timeout_ms}ms)")
-          emit_timeout_telemetry(timeout_ms, attempt)
-          result
+          {:error, %Mint.HTTPError{reason: :timeout}} ->
+            emit_timeout_telemetry(timeout_ms, attempt)
+            result
 
-        {:error, :timeout} ->
-          Logger.warning("Datadog export failed due to timeout (#{timeout_ms}ms)")
-          emit_timeout_telemetry(timeout_ms, attempt)
-          result
+          {:error, :timeout} ->
+            emit_timeout_telemetry(timeout_ms, attempt)
+            result
 
-        {:error, %Mint.TransportError{reason: :connect_timeout}} ->
-          Logger.warning("Datadog export failed due to connect timeout (#{connect_timeout_ms}ms)")
-          emit_connect_timeout_telemetry(connect_timeout_ms, attempt)
-          result
+          {:error, %Mint.TransportError{reason: :connect_timeout}} ->
+            emit_connect_timeout_telemetry(connect_timeout_ms, attempt)
+            result
 
-        {:error, %Mint.HTTPError{reason: :connect_timeout}} ->
-          Logger.warning("Datadog export failed due to connect timeout (#{connect_timeout_ms}ms)")
-          emit_connect_timeout_telemetry(connect_timeout_ms, attempt)
-          result
+          {:error, %Mint.HTTPError{reason: :connect_timeout}} ->
+            emit_connect_timeout_telemetry(connect_timeout_ms, attempt)
+            result
 
-        _ ->
-          result
-      end
-    end)
+          _ ->
+            result
+        end
+      end,
+      host: host,
+      port: port
+    )
   end
 
   defp emit_timeout_telemetry(timeout_ms, attempt) do
@@ -187,7 +186,8 @@ defmodule OpentelemetryDatadog.Exporter do
       {:agent_unavailable, reason} ->
         log_failure_with_trace_ids(
           "Datadog agent unavailable: #{reason}. Dropping #{span_count} spans.",
-          trace_ids
+          trace_ids,
+          state
         )
 
         emit_failure_telemetry(:agent_unavailable, reason, span_count, trace_ids, state)
@@ -195,7 +195,8 @@ defmodule OpentelemetryDatadog.Exporter do
       {:network_error, reason} ->
         log_failure_with_trace_ids(
           "Network error exporting to Datadog: #{reason}. Dropping #{span_count} spans.",
-          trace_ids
+          trace_ids,
+          state
         )
 
         emit_failure_telemetry(:network_error, reason, span_count, trace_ids, state)
@@ -203,7 +204,8 @@ defmodule OpentelemetryDatadog.Exporter do
       {:http_error, status, reason} ->
         log_failure_with_trace_ids(
           "HTTP error #{status} exporting to Datadog: #{reason}. Dropping #{span_count} spans.",
-          trace_ids
+          trace_ids,
+          state
         )
 
         emit_failure_telemetry(:http_error, "#{status}: #{reason}", span_count, trace_ids, state)
@@ -211,30 +213,36 @@ defmodule OpentelemetryDatadog.Exporter do
       {:unknown_error, reason} ->
         log_failure_with_trace_ids(
           "Unknown error exporting to Datadog: #{reason}. Dropping #{span_count} spans.",
-          trace_ids
+          trace_ids,
+          state
         )
 
         emit_failure_telemetry(:unknown_error, reason, span_count, trace_ids, state)
     end
   end
 
-  defp log_failure_with_trace_ids(message, trace_ids) do
+  defp log_failure_with_trace_ids(message, trace_ids, state) do
+    destination = if state, do: " destination=#{state.host}:#{state.port}", else: ""
+
     case trace_ids do
       [] ->
-        Logger.warning(message)
+        Logger.warning("#{message}#{destination}")
 
       [single_trace_id] ->
-        Logger.warning("#{message} [trace_id: #{single_trace_id}]")
+        Logger.warning("#{message}#{destination} [trace_id: #{single_trace_id}]")
 
       multiple_trace_ids when length(multiple_trace_ids) <= 5 ->
         trace_ids_str = Enum.join(multiple_trace_ids, ", ")
-        Logger.warning("#{message} [trace_ids: #{trace_ids_str}]")
+        Logger.warning("#{message}#{destination} [trace_ids: #{trace_ids_str}]")
 
       multiple_trace_ids ->
         first_few = Enum.take(multiple_trace_ids, 3)
         remaining_count = length(multiple_trace_ids) - 3
         trace_ids_str = Enum.join(first_few, ", ")
-        Logger.warning("#{message} [trace_ids: #{trace_ids_str} and #{remaining_count} more]")
+
+        Logger.warning(
+          "#{message}#{destination} [trace_ids: #{trace_ids_str} and #{remaining_count} more]"
+        )
     end
   end
 

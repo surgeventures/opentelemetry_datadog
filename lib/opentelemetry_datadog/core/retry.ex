@@ -141,10 +141,12 @@ defmodule OpentelemetryDatadog.Core.Retry do
   @spec with_retry((-> term()), keyword()) :: term()
   def with_retry(request_fn, opts \\ []) do
     max_attempts = Keyword.get(opts, :max_attempts, @max_attempts)
-    log_level = Keyword.get(opts, :log_level, :info)
+    log_level = Keyword.get(opts, :log_level, :warning)
     retry_id = :erlang.unique_integer([:positive])
+    host = Keyword.get(opts, :host)
+    port = Keyword.get(opts, :port)
 
-    execute_with_retry(request_fn, 1, max_attempts, log_level, retry_id)
+    execute_with_retry(request_fn, 1, max_attempts, log_level, retry_id, host, port)
   end
 
   @doc """
@@ -169,7 +171,7 @@ defmodule OpentelemetryDatadog.Core.Retry do
     execute_with_retry_attempt(request_fn, 1, max_attempts, log_level, retry_id)
   end
 
-  defp execute_with_retry(request_fn, attempt, max_attempts, log_level, retry_id) do
+  defp execute_with_retry(request_fn, attempt, max_attempts, log_level, retry_id, host, port) do
     if attempt == 1 do
       :telemetry.execute(
         [:opentelemetry_datadog, :retry, :start],
@@ -195,14 +197,25 @@ defmodule OpentelemetryDatadog.Core.Retry do
             %{attempt: attempt, max_attempts: max_attempts, reason: reason, retry_id: retry_id}
           )
 
+          destination = if host && port, do: " destination=#{host}:#{port}", else: ""
+
           Logger.log(
             log_level,
-            "Datadog export retry #{attempt}/#{max_attempts}: #{reason}. " <>
-              "Retrying in #{delay}ms (request took #{duration}ms)"
+            "Datadog export retry #{attempt}/#{max_attempts}: #{reason}." <>
+              destination <> " Retrying in #{delay}ms (request took #{duration}ms)"
           )
 
           Process.sleep(delay)
-          execute_with_retry(request_fn, attempt + 1, max_attempts, log_level, retry_id)
+
+          execute_with_retry(
+            request_fn,
+            attempt + 1,
+            max_attempts,
+            log_level,
+            retry_id,
+            host,
+            port
+          )
 
         {true, false} ->
           reason = retry_reason(response)
@@ -213,10 +226,12 @@ defmodule OpentelemetryDatadog.Core.Retry do
             %{result: :failed, reason: reason, max_attempts: max_attempts, retry_id: retry_id}
           )
 
+          destination = if host && port, do: " destination=#{host}:#{port}", else: ""
+
           Logger.log(
             log_level,
-            "Datadog export failed after #{max_attempts} attempts: #{reason}. " <>
-              "Final attempt took #{duration}ms"
+            "Datadog export failed after #{max_attempts} attempts: #{reason}." <>
+              destination <> " Final attempt took #{duration}ms"
           )
 
           response

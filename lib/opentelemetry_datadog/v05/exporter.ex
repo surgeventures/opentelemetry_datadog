@@ -123,7 +123,18 @@ defmodule OpentelemetryDatadog.V05.Exporter do
             _ -> nil
           end
 
-        {:ok, %{status: status_code}} ->
+        {:ok, %{status: status_code} = resp} ->
+          # Log non-retryable HTTP errors with destination context
+          body = Map.get(resp, :body, "")
+
+          reason =
+            if is_binary(body) and String.length(body) > 0, do: body, else: "HTTP #{status_code}"
+
+          Logger.error(
+            "Datadog v0.5 export failed: HTTP #{status_code} #{reason}. " <>
+              "Dropping #{count} spans. destination=#{state.host}:#{state.port}"
+          )
+
           # Emit error telemetry event for HTTP errors
           :telemetry.execute(
             [:opentelemetry_datadog, :export, :error],
@@ -137,9 +148,13 @@ defmodule OpentelemetryDatadog.V05.Exporter do
             }
           )
 
-          IO.inspect({:trace_error_response_v05, response})
-
         {:error, error} ->
+          # Log non-retryable errors with destination context
+          Logger.error(
+            "Datadog v0.5 export failed: #{inspect(error)}. " <>
+              "Dropping #{count} spans. destination=#{state.host}:#{state.port}"
+          )
+
           # Emit error telemetry event for request errors
           :telemetry.execute(
             [:opentelemetry_datadog, :export, :error],
@@ -152,8 +167,6 @@ defmodule OpentelemetryDatadog.V05.Exporter do
               retry: true
             }
           )
-
-          IO.inspect({:trace_error_response_v05, {:error, error}})
       end
     rescue
       exception ->
@@ -203,14 +216,18 @@ defmodule OpentelemetryDatadog.V05.Exporter do
   end
 
   def push_v05(body, headers, %State{host: host, port: port}) do
-    Retry.with_retry(fn ->
-      Req.put(
-        "#{host}:#{port}/v0.5/traces",
-        body: body,
-        headers: headers,
-        retry: false
-      )
-    end)
+    Retry.with_retry(
+      fn ->
+        Req.put(
+          "#{host}:#{port}/v0.5/traces",
+          body: body,
+          headers: headers,
+          retry: false
+        )
+      end,
+      host: host,
+      port: port
+    )
   end
 
   def format_span_v05(span_record, data, state) do
