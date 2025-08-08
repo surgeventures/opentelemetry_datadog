@@ -1,5 +1,5 @@
 defmodule OpentelemetryDatadog.TelemetryIntegrationTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
   use OpentelemetryDatadog.TestHelpers
 
   import ExUnit.CaptureLog

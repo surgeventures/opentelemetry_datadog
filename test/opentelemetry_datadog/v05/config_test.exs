@@ -1,5 +1,5 @@
 defmodule OpentelemetryDatadog.V05.ConfigTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
   use OpentelemetryDatadog.TestHelpers
 
   alias OpentelemetryDatadog.V05.Config
