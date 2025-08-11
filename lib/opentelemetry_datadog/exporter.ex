@@ -1,6 +1,7 @@
 defmodule OpentelemetryDatadog.Exporter do
   @behaviour :otel_exporter
 
+  require Logger
   require Record
   @deps_dir Mix.Project.deps_path()
   Record.defrecord(
@@ -79,7 +80,7 @@ defmodule OpentelemetryDatadog.Exporter do
         nil
 
       _ ->
-        IO.inspect({:trace_error_response, response})
+        Logger.error("Trace export failed", response: response)
     end
 
     :ok

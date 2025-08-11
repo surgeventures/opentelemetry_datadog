@@ -136,7 +136,7 @@ defmodule OpentelemetryDatadog.V05.Exporter do
             }
           )
 
-          IO.inspect({:trace_error_response_v05, response})
+          Logger.error("Trace export failed with HTTP error", response: response)
 
         {:error, error} ->
           # Emit error telemetry event for request errors
@@ -152,7 +152,7 @@ defmodule OpentelemetryDatadog.V05.Exporter do
             }
           )
 
-          IO.inspect({:trace_error_response_v05, {:error, error}})
+          Logger.error("Trace export failed with request error", error: error)
       end
     rescue
       exception ->
@@ -196,7 +196,7 @@ defmodule OpentelemetryDatadog.V05.Exporter do
         encoded
 
       {:error, error} ->
-        IO.inspect({:encoding_error_v05, error})
+        Logger.error("Failed to encode spans for v0.5", error: error)
         raise "Failed to encode spans for v0.5: #{inspect(error)}"
     end
   end
