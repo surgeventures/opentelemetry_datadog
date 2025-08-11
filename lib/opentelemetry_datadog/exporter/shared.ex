@@ -128,10 +128,13 @@ defmodule OpentelemetryDatadog.Exporter.Shared do
   def deep_remove_nils(nil), do: nil
 
   def deep_remove_nils(term) when is_map(term) do
-    term
-    |> Enum.reject(fn {_k, v} -> is_nil(v) end)
-    |> Enum.map(fn {k, v} -> {k, deep_remove_nils(v)} end)
-    |> Enum.into(%{})
+    Enum.reduce(term, %{}, fn {k, v}, acc ->
+      if is_nil(v) do
+        acc
+      else
+        Map.put(acc, k, deep_remove_nils(v))
+      end
+    end)
   end
 
   def deep_remove_nils(term) when is_list(term) do
