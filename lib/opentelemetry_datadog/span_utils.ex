@@ -5,7 +5,6 @@ defmodule OpentelemetryDatadog.SpanUtils do
 
   @doc "Converts various term types to strings for metadata."
   @spec term_to_string(term()) :: String.t()
-  def term_to_string(term) when is_boolean(term), do: inspect(term)
   def term_to_string(term) when is_binary(term), do: term
   def term_to_string(term) when is_atom(term), do: Atom.to_string(term)
   def term_to_string(term), do: inspect(term)
