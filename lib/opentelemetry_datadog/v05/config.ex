@@ -48,7 +48,7 @@ defmodule OpentelemetryDatadog.V05.Config do
       iex> OpentelemetryDatadog.V05.Config.setup()
       :ok
   """
-  @spec setup() :: :ok | Config.validation_error()
+  @spec setup() :: :ok | {:error, Config.validation_error()}
   def setup do
     case Config.load() do
       {:ok, config} ->
@@ -71,7 +71,7 @@ defmodule OpentelemetryDatadog.V05.Config do
       iex> OpentelemetryDatadog.V05.Config.setup(config)
       :ok
   """
-  @spec setup(keyword()) :: :ok | Config.validation_error()
+  @spec setup(keyword()) :: :ok | {:error, Config.validation_error()}
   def setup(config) when is_list(config) do
     # Extract protocol to validate it's v05, then validate the rest
     {protocol, base_config} = Keyword.pop(config, :protocol, :v05)
@@ -141,7 +141,7 @@ defmodule OpentelemetryDatadog.V05.Config do
       iex> config[:protocol]
       :v05
   """
-  @spec get_config() :: {:ok, keyword()} | Config.validation_error()
+  @spec get_config() :: {:ok, keyword()} | {:error, Config.validation_error()}
   def get_config do
     case Config.load() do
       {:ok, config} ->

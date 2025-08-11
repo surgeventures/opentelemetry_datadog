@@ -47,10 +47,10 @@ defmodule OpentelemetryDatadog.Config do
           sample_rate: float() | nil
         }
 
-  @type validation_error :: {:error, :missing_required_config | :invalid_config, String.t()}
+  @type validation_error :: {:missing_required_config | :invalid_config, String.t()}
 
   @doc "Loads configuration from environment variables."
-  @spec load() :: {:ok, t()} | validation_error()
+  @spec load() :: {:ok, t()} | {:error, validation_error()}
   def load do
     with {:ok, host} <- get_required_env("DD_AGENT_HOST"),
          {:ok, port} <- get_port(),
@@ -82,7 +82,7 @@ defmodule OpentelemetryDatadog.Config do
   end
 
   @doc "Validates the provided configuration."
-  @spec validate(t() | map()) :: :ok | validation_error()
+  @spec validate(t() | map()) :: :ok | {:error, validation_error()}
   def validate(%__MODULE__{} = config) do
     config
     |> Map.from_struct()
@@ -114,7 +114,7 @@ defmodule OpentelemetryDatadog.Config do
     |> Enum.into([])
   end
 
-  @spec get_required_env(String.t()) :: {:ok, String.t()} | validation_error()
+  @spec get_required_env(String.t()) :: {:ok, String.t()} | {:error, validation_error()}
   defp get_required_env(var_name) do
     case System.get_env(var_name) do
       nil -> {:error, :missing_required_config, "#{var_name} is required"}
@@ -123,7 +123,7 @@ defmodule OpentelemetryDatadog.Config do
     end
   end
 
-  @spec get_port() :: {:ok, pos_integer()} | validation_error()
+  @spec get_port() :: {:ok, pos_integer()} | {:error, validation_error()}
   defp get_port do
     Parser.get_env("DD_TRACE_AGENT_PORT", :integer,
       default: DatadogConstants.default(:port),
@@ -131,7 +131,7 @@ defmodule OpentelemetryDatadog.Config do
     )
   end
 
-  @spec get_sample_rate() :: {:ok, float() | nil} | validation_error()
+  @spec get_sample_rate() :: {:ok, float() | nil} | {:error, validation_error()}
   defp get_sample_rate do
     Parser.get_env("DD_TRACE_SAMPLE_RATE", :float,
       default: DatadogConstants.default(:sample_rate),
@@ -163,7 +163,7 @@ defmodule OpentelemetryDatadog.Config do
     end
   end
 
-  @spec get_tags() :: {:ok, map() | nil} | validation_error()
+  @spec get_tags() :: {:ok, map() | nil} | {:error, validation_error()}
   defp get_tags do
     case Parser.get_env("DD_TAGS", :string, default: DatadogConstants.default(:tags)) do
       {:ok, nil} ->
@@ -181,7 +181,8 @@ defmodule OpentelemetryDatadog.Config do
     end
   end
 
-  @spec parse_tags([String.t()], [{String.t(), String.t()}]) :: {:ok, map()} | validation_error()
+  @spec parse_tags([String.t()], [{String.t(), String.t()}]) ::
+          {:ok, map()} | {:error, validation_error()}
   defp parse_tags([], acc) do
     {:ok, Enum.into(acc, %{})}
   end
@@ -214,7 +215,7 @@ defmodule OpentelemetryDatadog.Config do
     end
   end
 
-  @spec validate_required(map(), atom(), String.t()) :: :ok | validation_error()
+  @spec validate_required(map(), atom(), String.t()) :: :ok | {:error, validation_error()}
   defp validate_required(config, key, error_message) do
     case Map.get(config, key) do
       nil -> {:error, :missing_required_config, error_message}
@@ -222,26 +223,26 @@ defmodule OpentelemetryDatadog.Config do
     end
   end
 
-  @spec validate_port(any()) :: :ok | validation_error()
+  @spec validate_port(any()) :: :ok | {:error, validation_error()}
   defp validate_port(port) when is_integer(port) and port > 0 and port <= 65535, do: :ok
 
   defp validate_port(_),
     do: {:error, :invalid_config, "port must be a valid port number (1-65535)"}
 
-  @spec validate_sample_rate(any()) :: :ok | validation_error()
+  @spec validate_sample_rate(any()) :: :ok | {:error, validation_error()}
   defp validate_sample_rate(nil), do: :ok
   defp validate_sample_rate(rate) when is_float(rate) and rate >= 0.0 and rate <= 1.0, do: :ok
 
   defp validate_sample_rate(_),
     do: {:error, :invalid_config, "sample_rate must be a float between 0.0 and 1.0"}
 
-  @spec validate_port_env(any()) :: :ok | validation_error()
+  @spec validate_port_env(any()) :: :ok | {:error, validation_error()}
   defp validate_port_env(port) when is_integer(port) and port > 0 and port <= 65535, do: :ok
 
   defp validate_port_env(_),
     do: {:error, :invalid_config, "DD_TRACE_AGENT_PORT must be a valid port number (1-65535)"}
 
-  @spec validate_sample_rate_env(any()) :: :ok | validation_error()
+  @spec validate_sample_rate_env(any()) :: :ok | {:error, validation_error()}
   defp validate_sample_rate_env(nil), do: :ok
   defp validate_sample_rate_env(rate) when is_float(rate) and rate >= 0.0 and rate <= 1.0, do: :ok
 
