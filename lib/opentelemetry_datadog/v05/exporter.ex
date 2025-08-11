@@ -108,19 +108,13 @@ defmodule OpentelemetryDatadog.V05.Exporter do
       duration = System.monotonic_time() - start_time
 
       case response do
-        {:ok, %{status: status_code} = resp} when status_code in 200..299 ->
+        {:ok, %{status: status_code}} when status_code in 200..299 ->
           # Emit success telemetry event
           :telemetry.execute(
             [:opentelemetry_datadog, :export, :stop],
             %{duration: duration, status_code: status_code, span_count: count},
             %{endpoint: endpoint, host: state.host, port: state.port}
           )
-
-          # v0.5 API response handling
-          case resp.body do
-            %{"rate_by_service" => _rate_by_service} -> nil
-            _ -> nil
-          end
 
         {:ok, %{status: status_code}} ->
           # Emit error telemetry event for HTTP errors
