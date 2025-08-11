@@ -28,10 +28,12 @@ defmodule OpentelemetryDatadog.Exporter.Shared do
   @type mapper_config :: {module(), any()}
   @type otel_span :: Keyword.t()
   @type span_data :: map()
+  @type span_record :: tuple()
 
   @doc """
   Accessor function for span record.
   """
+  @spec get_span(span_record()) :: otel_span()
   def get_span(span_record), do: span(span_record)
 
   @doc """
@@ -61,7 +63,7 @@ defmodule OpentelemetryDatadog.Exporter.Shared do
   This is the base formatting logic shared between exporters.
   Version-specific formatting should be handled by the caller.
   """
-  @spec format_span_base(any(), span_data(), map()) :: DatadogSpan.t()
+  @spec format_span_base(span_record(), span_data(), map()) :: DatadogSpan.t()
   def format_span_base(span_record, _data, _state) do
     span = span(span_record)
     attributes = attributes(Keyword.fetch!(span, :attributes))
@@ -95,7 +97,7 @@ defmodule OpentelemetryDatadog.Exporter.Shared do
 
   Combines OpenTelemetry events with resource data.
   """
-  @spec build_processing_state(any(), span_data()) :: map()
+  @spec build_processing_state(span_record(), span_data()) :: map()
   def build_processing_state(span_record, data) do
     span = span(span_record)
 
@@ -166,7 +168,7 @@ defmodule OpentelemetryDatadog.Exporter.Shared do
   @doc """
   Builds resource data structure from OpenTelemetry resource.
   """
-  @spec build_resource_data(any()) :: map()
+  @spec build_resource_data(tuple()) :: map()
   def build_resource_data(resource) do
     resource = resource(resource)
     resource_attrs = attributes(Keyword.fetch!(resource, :attributes))
