@@ -46,7 +46,7 @@ defmodule OpentelemetryDatadog.ConfigTest do
       invalid_port_config()
 
       assert {:error, :invalid_config, message} = Config.load()
-      assert message =~ "DD_TRACE_AGENT_PORT must be a valid port number"
+      assert message =~ "DD_TRACE_AGENT_PORT must be a valid integer"
     end
 
     test "returns error for port out of range" do

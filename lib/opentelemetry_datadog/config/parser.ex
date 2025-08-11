@@ -31,24 +31,10 @@ defmodule OpentelemetryDatadog.Config.Parser do
           {:ok, any()} | {:error, validation_error()}
   defp convert_type(value, :string, _env_var_name), do: {:ok, value}
 
-  defp convert_type(value, :integer, "DD_TRACE_AGENT_PORT") do
-    case Integer.parse(value) do
-      {int, ""} -> {:ok, int}
-      _ -> {:error, :invalid_config, "DD_TRACE_AGENT_PORT must be a valid port number (1-65535)"}
-    end
-  end
-
   defp convert_type(value, :integer, env_var_name) do
     case Integer.parse(value) do
       {int, ""} -> {:ok, int}
       _ -> {:error, :invalid_config, "#{env_var_name} must be a valid integer"}
-    end
-  end
-
-  defp convert_type(value, :float, "DD_TRACE_SAMPLE_RATE") do
-    case Float.parse(value) do
-      {float, ""} -> {:ok, float}
-      _ -> {:error, :invalid_config, "DD_TRACE_SAMPLE_RATE must be a float between 0.0 and 1.0"}
     end
   end
 
