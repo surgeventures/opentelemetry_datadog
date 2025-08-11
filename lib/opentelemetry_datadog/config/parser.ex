@@ -3,7 +3,7 @@ defmodule OpentelemetryDatadog.Config.Parser do
   Environment variable parser and type converter for Datadog configuration.
   """
 
-  @type validation_error :: {:missing_required_config | :invalid_config, String.t()}
+  @type validation_error :: {:invalid_config, String.t()}
 
   @doc "Unified environment variable getter with type conversion and validation."
   @spec get_env(String.t(), atom(), keyword()) :: {:ok, any()} | {:error, validation_error()}
