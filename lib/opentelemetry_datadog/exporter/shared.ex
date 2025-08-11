@@ -139,15 +139,25 @@ defmodule OpentelemetryDatadog.Exporter.Shared do
 
   def deep_remove_nils(term) when is_list(term) do
     if Keyword.keyword?(term) do
-      term
-      |> Enum.reject(fn {_k, v} -> is_nil(v) end)
-      |> Enum.map(fn {k, v} -> {k, deep_remove_nils(v)} end)
+      reduce_non_nils(term, fn {_k, v} -> is_nil(v) end, fn {k, v} -> {k, deep_remove_nils(v)} end)
     else
-      Enum.map(term, &deep_remove_nils/1)
+      reduce_non_nils(term, &is_nil/1, &deep_remove_nils/1)
     end
   end
 
   def deep_remove_nils(term), do: term
+
+  defp reduce_non_nils(list, nil_check_fn, transform_fn) do
+    list
+    |> Enum.reduce([], fn item, acc ->
+      if nil_check_fn.(item) do
+        acc
+      else
+        [transform_fn.(item) | acc]
+      end
+    end)
+    |> Enum.reverse()
+  end
 
   @doc """
   Builds common headers for Datadog trace requests.
