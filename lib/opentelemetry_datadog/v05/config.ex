@@ -82,7 +82,11 @@ defmodule OpentelemetryDatadog.V05.Config do
 
         case Config.validate(config_map) do
           :ok ->
-            # TODO: Automatically configure and register v0.5 OpenTelemetry exporter
+            # TODO: This function should actually register the v0.5 exporter with OpenTelemetry,
+            # but currently only validates config. Users expect setup() to fully configure
+            # the exporter, not just validate it. Missing implementation should:
+            # 1. Create exporter instance: {:ok, pid} = OpentelemetryDatadog.V05.Exporter.init(config)
+            # 2. Register with OTel: :otel_batch_processor.set_exporter(pid)
             :ok
 
           {:error, _, _} = error ->
