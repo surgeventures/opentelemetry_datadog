@@ -66,14 +66,15 @@ defmodule OpentelemetryDatadog.Exporter.Shared do
   @spec format_span_base(span_record(), span_data(), map()) :: DatadogSpan.t()
   def format_span_base(span_record, _data, _state) do
     span = span(span_record)
-    attributes = attributes(Keyword.fetch!(span, :attributes))
+    attributes_record = Keyword.fetch!(span, :attributes)
+    attributes_data = attributes(attributes_record)
 
     dd_span_kind = Atom.to_string(Keyword.fetch!(span, :kind))
     start_time_nanos = :opentelemetry.timestamp_to_nano(Keyword.fetch!(span, :start_time))
     end_time_nanos = :opentelemetry.timestamp_to_nano(Keyword.fetch!(span, :end_time))
 
     meta =
-      Keyword.fetch!(attributes, :map)
+      Keyword.fetch!(attributes_data, :map)
       |> Map.put(:"span.kind", dd_span_kind)
       |> Enum.map(fn {k, v} -> {k, SpanUtils.term_to_string(v)} end)
       |> Enum.into(%{})
@@ -170,13 +171,14 @@ defmodule OpentelemetryDatadog.Exporter.Shared do
   """
   @spec build_resource_data(tuple()) :: map()
   def build_resource_data(resource) do
-    resource = resource(resource)
-    resource_attrs = attributes(Keyword.fetch!(resource, :attributes))
+    resource_data = resource(resource)
+    attributes_record = Keyword.fetch!(resource_data, :attributes)
+    attributes_data = attributes(attributes_record)
 
     %{
-      resource: resource,
-      resource_attrs: resource_attrs,
-      resource_map: Keyword.fetch!(resource_attrs, :map)
+      resource: resource_data,
+      resource_attrs: attributes_data,
+      resource_map: Keyword.fetch!(attributes_data, :map)
     }
   end
 end
