@@ -40,8 +40,8 @@ defmodule OpentelemetryDatadog.Exporter do
     ]
   end
 
-  alias OpentelemetryDatadog.{Mapper, SpanUtils, Encoder}
-  alias OpentelemetryDatadog.Exporter.Shared
+  alias OpentelemetryDatadog.{Mapper, Encoder}
+  alias OpentelemetryDatadog.{Utils.Exporter, Utils.Span}
   alias OpentelemetryDatadog.SpanProcessor
 
   @mappers [
@@ -56,7 +56,7 @@ defmodule OpentelemetryDatadog.Exporter do
     state = %State{
       host: Keyword.fetch!(config, :host),
       port: Keyword.fetch!(config, :port),
-      container_id: SpanUtils.get_container_id(),
+      container_id: Span.get_container_id(),
       protocol: protocol
     }
 
@@ -65,7 +65,7 @@ defmodule OpentelemetryDatadog.Exporter do
 
   @impl true
   def export(:traces, tid, resource, %{protocol: :v05} = state) do
-    data = Shared.build_resource_data(resource)
+    data = Exporter.build_resource_data(resource)
 
     formatted =
       :ets.foldl(
@@ -97,7 +97,7 @@ defmodule OpentelemetryDatadog.Exporter do
     )
 
     try do
-      headers = Shared.build_headers(count, state.container_id)
+      headers = Exporter.build_headers(count, state.container_id)
 
       response =
         formatted
@@ -200,24 +200,24 @@ defmodule OpentelemetryDatadog.Exporter do
       body: body,
       headers: headers,
       retry: :transient,
-      retry_delay: &Shared.retry_delay/1,
+      retry_delay: &Exporter.retry_delay/1,
       retry_log_level: false
     )
   end
 
   def format_span_v05(span_record, data, state) do
-    processing_state = Shared.build_processing_state(span_record, data)
+    processing_state = Exporter.build_processing_state(span_record, data)
 
-    dd_span = Shared.format_span_base(span_record, data, state)
+    dd_span = Exporter.format_span_base(span_record, data, state)
 
     dd_span_kind = Atom.to_string(Keyword.fetch!(span(span_record), :kind))
 
     dd_span = %{
       dd_span
-      | meta: Map.put(dd_span.meta, :env, SpanUtils.get_env_from_resource(data)),
-        service: SpanUtils.get_service_from_resource(data),
-        resource: SpanUtils.get_resource_from_span(dd_span.name, dd_span.meta),
-        type: SpanUtils.get_type_from_span(dd_span_kind),
+      | meta: Map.put(dd_span.meta, :env, Span.get_env_from_resource(data)),
+        service: Span.get_service_from_resource(data),
+        resource: Span.get_resource_from_span(dd_span.name, dd_span.meta),
+        type: Span.get_type_from_span(dd_span_kind),
         error: 0
     }
 
@@ -254,6 +254,6 @@ defmodule OpentelemetryDatadog.Exporter do
   end
 
   def apply_mappers(span, otel_span, state) do
-    Shared.apply_mappers(@mappers, span, otel_span, state)
+    Exporter.apply_mappers(@mappers, span, otel_span, state)
   end
 end
