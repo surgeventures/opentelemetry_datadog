@@ -1,4 +1,12 @@
 defmodule OpentelemetryDatadog.Exporter do
+  @moduledoc """
+  Datadog v0.5 traces exporter for OpenTelemetry.
+
+  This exporter sends traces to the Datadog Agent using the /v0.5/traces endpoint
+  with MessagePack serialization. It maintains compatibility with the existing
+  exporter while providing v0.5 specific functionality.
+  """
+
   @behaviour :otel_exporter
 
   require Logger
@@ -28,6 +36,7 @@ defmodule OpentelemetryDatadog.Exporter do
       :port,
       :service_name,
       :container_id,
+<<<<<<< HEAD
       :timeout_ms,
       :connect_timeout_ms
     ]
@@ -35,60 +44,104 @@ defmodule OpentelemetryDatadog.Exporter do
 
   alias OpentelemetryDatadog.{Mapper, SpanUtils}
   alias OpentelemetryDatadog.Core.Retry
+=======
+      :protocol
+    ]
+  end
+
+  alias OpentelemetryDatadog.{Mapper, SpanUtils, Encoder}
+>>>>>>> revert-3-revert-2-env-based-configuration
   alias OpentelemetryDatadog.Exporter.Shared
   alias OpentelemetryDatadog.SpanProcessor
 
   @mappers [
     {Mapper.LiftError, []},
     {Mapper.InferDatadogFields, []}
-    # {Mapper.AlwaysSample, []},
   ]
 
   @impl true
   def init(config) do
+    protocol = Keyword.get(config, :protocol, :v05)
+
     state = %State{
       host: Keyword.fetch!(config, :host),
       port: Keyword.fetch!(config, :port),
       container_id: SpanUtils.get_container_id(),
       timeout_ms: Keyword.get(config, :timeout_ms, 2000),
-      connect_timeout_ms: Keyword.get(config, :connect_timeout_ms, 500)
+      connect_timeout_ms: Keyword.get(config, :connect_timeout_ms, 500),
+      protocol: protocol
     }
 
     {:ok, state}
   end
 
   @impl true
-  def export(:traces, tid, resource, %{container_id: container_id} = state) do
+  def export(:traces, tid, resource, %{protocol: :v05} = state) do
     data = Shared.build_resource_data(resource)
 
     formatted =
       :ets.foldl(
         fn span, acc ->
-          [format_span(span, data, state) | acc]
+          case format_span_v05(span, data, state) do
+            [] ->
+              Logger.warning("Span skipped: #{inspect(span)}")
+              acc
+
+            span_data ->
+              [span_data | acc]
+          end
         end,
         [],
         tid
       )
 
     count = Enum.count(formatted)
-    headers = Shared.build_headers(count, container_id)
 
-    response =
-      formatted
-      |> encode()
-      |> push(headers, state)
+    # Emit telemetry start event
+    start_time = System.monotonic_time()
+    system_time = System.system_time()
+    endpoint = "/v0.5/traces"
 
-    case response do
-      {:ok, %{status: 200} = resp} ->
-        # https://github.com/DataDog/datadog-agent/issues/3031
-        %{"rate_by_service" => _rate_by_service} = resp.body
-        nil
+    :telemetry.execute(
+      [:opentelemetry_datadog, :export, :start],
+      %{system_time: system_time, span_count: count},
+      %{endpoint: endpoint, host: state.host, port: state.port}
+    )
 
-      error_response ->
-        handle_export_failure(error_response, formatted, state)
+    try do
+      headers = Shared.build_headers(count, state.container_id)
+
+      response =
+        formatted
+        |> encode_v05()
+        |> push_v05(headers, state)
+
+      duration = System.monotonic_time() - start_time
+
+      case response do
+        {:ok, %{status: status_code}} when status_code in 200..299 ->
+          # Emit success telemetry event
+          :telemetry.execute(
+            [:opentelemetry_datadog, :export, :stop],
+            %{duration: duration, status_code: status_code, span_count: count},
+            %{endpoint: endpoint, host: state.host, port: state.port}
+          )
+
+        error_response ->
+          handle_export_failure(error_response, formatted, state)
+      end
+    rescue
+      exception ->
+        # Handle exceptions as export failures
+        handle_export_failure({:exception, exception}, formatted, state)
     end
 
     :ok
+  end
+
+  def export(:traces, tid, resource, state) do
+    # For non-v05 protocols, we still use the v05 implementation as default
+    export(:traces, tid, resource, Map.put(state, :protocol, :v05))
   end
 
   def export(:metrics, _tid, _resource, _state) do
@@ -100,27 +153,32 @@ defmodule OpentelemetryDatadog.Exporter do
     :ok
   end
 
-  defp encode(data) do
-    data
-    |> Shared.deep_remove_nils()
-    |> Msgpax.pack!(data)
+  def encode_v05(data) do
+    case Encoder.encode(data) do
+      {:ok, encoded} ->
+        encoded
+
+      {:error, error} ->
+        Logger.error("Failed to encode spans for v0.5", error: error)
+        raise "Failed to encode spans for v0.5: #{inspect(error)}"
+    end
   end
 
-  def push(body, headers, %State{
+  def push_v05(body, headers, %State{
         host: host,
         port: port,
         timeout_ms: timeout_ms,
         connect_timeout_ms: connect_timeout_ms
       }) do
     Logger.debug(
-      "Datadog export request: #{host}:#{port}/v0.4/traces (timeout: #{timeout_ms}ms, connect_timeout: #{connect_timeout_ms}ms)"
+      "Datadog export request: #{host}:#{port}/v0.5/traces (timeout: #{timeout_ms}ms, connect_timeout: #{connect_timeout_ms}ms)"
     )
 
     Retry.with_retry_attempt(
       fn attempt ->
         result =
           Req.put(
-            "http://#{host}:#{port}/v0.4/traces",
+            "http://#{host}:#{port}/v0.5/traces",
             body: body,
             headers: headers,
             retry: false,
@@ -256,6 +314,9 @@ defmodule OpentelemetryDatadog.Exporter do
   # Categorizes different types of export failures for appropriate handling.
   defp categorize_failure(response) do
     case response do
+      # Exception handling
+      {:exception, exception} ->
+        {:unknown_error, "Exception: #{Exception.message(exception)}"}
       # Connection refused - agent is down
       {:error, %Mint.TransportError{reason: :econnrefused}} ->
         {:agent_unavailable, "connection refused"}
@@ -363,12 +424,21 @@ defmodule OpentelemetryDatadog.Exporter do
     |> Enum.uniq()
   end
 
-  def format_span(span_record, data, state) do
+  def format_span_v05(span_record, data, state) do
     processing_state = Shared.build_processing_state(span_record, data)
 
     dd_span = Shared.format_span_base(span_record, data, state)
 
-    dd_span = %{dd_span | meta: Map.put(dd_span.meta, :env, "hans-local-testing")}
+    dd_span_kind = Atom.to_string(Keyword.fetch!(span(span_record), :kind))
+
+    dd_span = %{
+      dd_span
+      | meta: Map.put(dd_span.meta, :env, SpanUtils.get_env_from_resource(data)),
+        service: SpanUtils.get_service_from_resource(data),
+        resource: SpanUtils.get_resource_from_span(dd_span.name, dd_span.meta),
+        type: SpanUtils.get_type_from_span(dd_span_kind),
+        error: 0
+    }
 
     span = apply_mappers(dd_span, span(span_record), processing_state)
 
@@ -377,13 +447,27 @@ defmodule OpentelemetryDatadog.Exporter do
         []
 
       span ->
-        span = Map.delete(span, :__struct__)
-        [span]
+        span_map = %{
+          trace_id: span.trace_id,
+          span_id: span.span_id,
+          parent_id: span.parent_id,
+          name: span.name,
+          service: span.service || "unknown-service",
+          resource: span.resource || span.name,
+          type: span.type || "custom",
+          start: span.start,
+          duration: span.duration,
+          error: span.error || 0,
+          meta: span.meta || %{},
+          metrics: span.metrics || %{}
+        }
+
+        span_map
     end
   end
 
   def format_span_with_processor(span_record, data, state) do
-    processor = %SpanProcessor.V04{}
+    processor = %SpanProcessor.V05{}
     processing_state = Map.put(state, :mappers, @mappers)
     SpanProcessor.process_span(processor, span_record, data, processing_state)
   end

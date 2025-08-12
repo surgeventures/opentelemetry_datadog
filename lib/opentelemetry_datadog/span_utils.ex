@@ -1,11 +1,10 @@
 defmodule OpentelemetryDatadog.SpanUtils do
   @moduledoc """
-  Common utilities for span processing shared between v0.4 and v0.5 exporters.
+  Common utilities for span processing in Datadog exporters.
   """
 
   @doc "Converts various term types to strings for metadata."
   @spec term_to_string(term()) :: String.t()
-  def term_to_string(term) when is_boolean(term), do: inspect(term)
   def term_to_string(term) when is_binary(term), do: term
   def term_to_string(term) when is_atom(term), do: Atom.to_string(term)
   def term_to_string(term), do: inspect(term)

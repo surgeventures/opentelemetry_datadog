@@ -2,7 +2,7 @@ defmodule OpentelemetryDatadog.Exporter.Shared do
   @moduledoc """
   Shared utilities for OpenTelemetry Datadog exporters.
 
-  Contains common functionality used by both v0.4 and v0.5 exporters
+  Contains common functionality used by Datadog exporters
   to eliminate code duplication.
   """
 
@@ -28,10 +28,12 @@ defmodule OpentelemetryDatadog.Exporter.Shared do
   @type mapper_config :: {module(), any()}
   @type otel_span :: Keyword.t()
   @type span_data :: map()
+  @type span_record :: tuple()
 
   @doc """
   Accessor function for span record.
   """
+  @spec get_span(span_record()) :: otel_span()
   def get_span(span_record), do: span(span_record)
 
   @doc """
@@ -61,17 +63,18 @@ defmodule OpentelemetryDatadog.Exporter.Shared do
   This is the base formatting logic shared between exporters.
   Version-specific formatting should be handled by the caller.
   """
-  @spec format_span_base(any(), span_data(), map()) :: DatadogSpan.t()
+  @spec format_span_base(span_record(), span_data(), map()) :: DatadogSpan.t()
   def format_span_base(span_record, _data, _state) do
     span = span(span_record)
-    attributes = attributes(Keyword.fetch!(span, :attributes))
+    attributes_record = Keyword.fetch!(span, :attributes)
+    attributes_data = attributes(attributes_record)
 
     dd_span_kind = Atom.to_string(Keyword.fetch!(span, :kind))
     start_time_nanos = :opentelemetry.timestamp_to_nano(Keyword.fetch!(span, :start_time))
     end_time_nanos = :opentelemetry.timestamp_to_nano(Keyword.fetch!(span, :end_time))
 
     meta =
-      Keyword.fetch!(attributes, :map)
+      Keyword.fetch!(attributes_data, :map)
       |> Map.put(:"span.kind", dd_span_kind)
       |> Enum.map(fn {k, v} -> {k, SpanUtils.term_to_string(v)} end)
       |> Enum.into(%{})
@@ -95,7 +98,7 @@ defmodule OpentelemetryDatadog.Exporter.Shared do
 
   Combines OpenTelemetry events with resource data.
   """
-  @spec build_processing_state(any(), span_data()) :: map()
+  @spec build_processing_state(span_record(), span_data()) :: map()
   def build_processing_state(span_record, data) do
     span = span(span_record)
 
@@ -126,24 +129,36 @@ defmodule OpentelemetryDatadog.Exporter.Shared do
   def deep_remove_nils(nil), do: nil
 
   def deep_remove_nils(term) when is_map(term) do
-    term
-    |> Map.to_list()
-    |> Enum.reject(fn {_k, v} -> is_nil(v) end)
-    |> Enum.map(fn {k, v} -> {k, deep_remove_nils(v)} end)
-    |> Enum.into(%{})
+    Enum.reduce(term, %{}, fn {k, v}, acc ->
+      if is_nil(v) do
+        acc
+      else
+        Map.put(acc, k, deep_remove_nils(v))
+      end
+    end)
   end
 
   def deep_remove_nils(term) when is_list(term) do
     if Keyword.keyword?(term) do
-      term
-      |> Enum.reject(fn {_k, v} -> is_nil(v) end)
-      |> Enum.map(fn {k, v} -> {k, deep_remove_nils(v)} end)
+      reduce_non_nils(term, fn {_k, v} -> is_nil(v) end, fn {k, v} -> {k, deep_remove_nils(v)} end)
     else
-      Enum.map(term, &deep_remove_nils/1)
+      reduce_non_nils(term, &is_nil/1, &deep_remove_nils/1)
     end
   end
 
   def deep_remove_nils(term), do: term
+
+  defp reduce_non_nils(list, nil_check_fn, transform_fn) do
+    list
+    |> Enum.reduce([], fn item, acc ->
+      if nil_check_fn.(item) do
+        acc
+      else
+        [transform_fn.(item) | acc]
+      end
+    end)
+    |> Enum.reverse()
+  end
 
   @doc """
   Builds common headers for Datadog trace requests.
@@ -167,15 +182,16 @@ defmodule OpentelemetryDatadog.Exporter.Shared do
   @doc """
   Builds resource data structure from OpenTelemetry resource.
   """
-  @spec build_resource_data(any()) :: map()
+  @spec build_resource_data(tuple()) :: map()
   def build_resource_data(resource) do
-    resource = resource(resource)
-    resource_attrs = attributes(Keyword.fetch!(resource, :attributes))
+    resource_data = resource(resource)
+    attributes_record = Keyword.fetch!(resource_data, :attributes)
+    attributes_data = attributes(attributes_record)
 
     %{
-      resource: resource,
-      resource_attrs: resource_attrs,
-      resource_map: Keyword.fetch!(resource_attrs, :map)
+      resource: resource_data,
+      resource_attrs: attributes_data,
+      resource_map: Keyword.fetch!(attributes_data, :map)
     }
   end
 end

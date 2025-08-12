@@ -6,7 +6,7 @@ defmodule OpentelemetryDatadog do
   alias OpentelemetryDatadog.{Config, ConfigError}
 
   @doc "Sets up the Datadog exporter with configuration from environment variables."
-  @spec setup() :: :ok | Config.validation_error()
+  @spec setup() :: :ok | {:error, Config.validation_error()}
   def setup do
     case Config.load() do
       {:ok, config} ->
@@ -28,13 +28,17 @@ defmodule OpentelemetryDatadog do
       iex> OpentelemetryDatadog.setup(config)
       :ok
   """
-  @spec setup(keyword()) :: :ok | Config.validation_error()
+  @spec setup(keyword()) :: :ok | {:error, Config.validation_error()}
   def setup(config) when is_list(config) do
     config_map = Enum.into(config, %{})
 
     case Config.validate(config_map) do
       :ok ->
-        # TODO: Automatically configure and register OpenTelemetry exporter
+        # TODO: This function should actually register the Datadog exporter with OpenTelemetry,
+        # but currently only validates config. Users expect setup() to fully configure
+        # the exporter, not just validate it. Missing implementation should:
+        # 1. Create exporter instance: {:ok, pid} = OpentelemetryDatadog.Exporter.init(config)
+        # 2. Register with OTel: :otel_batch_processor.set_exporter(pid)
         :ok
 
       {:error, _, _} = error ->
@@ -90,7 +94,7 @@ defmodule OpentelemetryDatadog do
       iex> config.service
       "my-service"
   """
-  @spec get_config() :: {:ok, Config.t()} | Config.validation_error()
+  @spec get_config() :: {:ok, Config.t()} | {:error, Config.validation_error()}
   def get_config do
     Config.load()
   end

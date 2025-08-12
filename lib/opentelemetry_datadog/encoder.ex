@@ -1,9 +1,9 @@
-defmodule OpentelemetryDatadog.V05.Encoder do
+defmodule OpentelemetryDatadog.Encoder do
   @moduledoc """
-  Encoder for Datadog v0.5 traces API.
+  Encoder for Datadog traces API.
   """
 
-  @doc "Encodes a list of spans to MessagePack format for v0.5 API."
+  @doc "Encodes a list of spans to MessagePack format for the Datadog API."
   @spec encode([map()]) :: {:ok, binary()} | {:error, term()}
   def encode(spans) when is_list(spans) do
     try do
@@ -20,7 +20,7 @@ defmodule OpentelemetryDatadog.V05.Encoder do
   end
 
   @doc """
-  Validates and normalizes a single span for v0.5 format.
+  Validates and normalizes a single span for the format.
 
   Ensures all mandatory fields are present and properly typed.
   """

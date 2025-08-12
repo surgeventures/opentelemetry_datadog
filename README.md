@@ -2,7 +2,7 @@
 
 Datadog exporter for OpenTelemetry in Elixir. Exports traces directly to the Datadog Agent using native Datadog protocol over MessagePack.
 
-Supports `/v0.4/traces` (default) and `/v0.5/traces` endpoints.
+Uses the `/v0.5/traces` endpoint.
 
 ## Installation
 
@@ -60,25 +60,9 @@ OpentelemetryDatadog.setup([
 
 ## OpenTelemetry Setup
 
-### Using v0.4 API (default)
-
 ```elixir
 config :opentelemetry,
   traces_exporter: {OpentelemetryDatadog.Exporter, []},
-  sampler: {:otel_sampler_parent_based, %{root: {:otel_sampler_always_on, %{}}}},
-  text_map_propagators: [OpentelemetryDatadog.Propagator.Datadog],
-  resource: %{
-    "service.name": "my-app",
-    "deployment.environment": "production",
-    "service.version": "1.2.3"
-  }
-```
-
-### Using v0.5 API
-
-```elixir
-config :opentelemetry,
-  traces_exporter: {OpentelemetryDatadog.V05.Exporter, [protocol: :v05]},
   sampler: {:otel_sampler_parent_based, %{root: {:otel_sampler_always_on, %{}}}},
   text_map_propagators: [OpentelemetryDatadog.Propagator.Datadog],
   resource: %{

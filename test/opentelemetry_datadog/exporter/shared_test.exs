@@ -19,10 +19,35 @@ defmodule OpentelemetryDatadog.Exporter.SharedTest do
       assert Shared.deep_remove_nils(input) == expected
     end
 
-    test "handles regular lists" do
+    test "removes nil values from regular lists" do
       input = [1, nil, [2, nil, 3]]
-      expected = [1, nil, [2, nil, 3]]
+      expected = [1, [2, 3]]
       assert Shared.deep_remove_nils(input) == expected
+    end
+
+    test_cases = [
+      {
+        "all nils list becomes empty",
+        [nil, nil, nil],
+        []
+      },
+      {
+        "mixed nested structures",
+        [1, nil, %{a: nil, b: 2}, [nil, 3, nil]],
+        [1, %{b: 2}, [3]]
+      },
+      {
+        "empty list stays empty",
+        [],
+        []
+      }
+    ]
+
+    for {description, input, expected} <- test_cases do
+      test "handles edge cases for lists: #{description}" do
+        assert Shared.deep_remove_nils(unquote(Macro.escape(input))) ==
+                 unquote(Macro.escape(expected))
+      end
     end
 
     test "handles non-collection types" do

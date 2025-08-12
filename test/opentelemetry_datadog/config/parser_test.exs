@@ -47,16 +47,16 @@ defmodule OpentelemetryDatadog.Config.ParserTest do
       assert msg =~ "must be a valid float"
     end
 
-    test "handles DD_TRACE_AGENT_PORT validation" do
+    test "handles DD_TRACE_AGENT_PORT type conversion" do
       put_dd_env("DD_TRACE_AGENT_PORT", "invalid")
       assert {:error, :invalid_config, msg} = Parser.get_env("DD_TRACE_AGENT_PORT", :integer)
-      assert msg =~ "must be a valid port number"
+      assert msg =~ "must be a valid integer"
     end
 
-    test "handles DD_TRACE_SAMPLE_RATE validation" do
+    test "handles DD_TRACE_SAMPLE_RATE type conversion" do
       put_dd_env("DD_TRACE_SAMPLE_RATE", "invalid")
       assert {:error, :invalid_config, msg} = Parser.get_env("DD_TRACE_SAMPLE_RATE", :float)
-      assert msg =~ "must be a float between 0.0 and 1.0"
+      assert msg =~ "must be a valid float"
     end
 
     test "applies validation function" do
