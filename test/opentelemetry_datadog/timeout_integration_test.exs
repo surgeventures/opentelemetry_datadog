@@ -61,8 +61,8 @@ defmodule OpentelemetryDatadog.TimeoutIntegrationTest do
       test_cases = [
         {"0", "DD_EXPORT_TIMEOUT_MS must be a positive integer"},
         {"-1000", "DD_EXPORT_TIMEOUT_MS must be a positive integer"},
-        {"invalid", "DD_EXPORT_TIMEOUT_MS must be a positive integer"},
-        {"1.5", "DD_EXPORT_TIMEOUT_MS must be a positive integer"}
+        {"invalid", "DD_EXPORT_TIMEOUT_MS must be a valid integer"},
+        {"1.5", "DD_EXPORT_TIMEOUT_MS must be a valid integer"}
       ]
 
       for {timeout_value, expected_error} <- test_cases do

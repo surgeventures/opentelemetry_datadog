@@ -113,7 +113,7 @@ defmodule OpentelemetryDatadog.ConfigTest do
       put_env(%{"DD_AGENT_HOST" => "localhost", "DD_EXPORT_TIMEOUT_MS" => "invalid"})
 
       assert {:error, :invalid_config, message} = Config.load()
-      assert message =~ "DD_EXPORT_TIMEOUT_MS must be a positive integer"
+      assert message =~ "DD_EXPORT_TIMEOUT_MS must be a valid integer"
     end
 
     test "returns error for negative timeout" do
@@ -141,7 +141,7 @@ defmodule OpentelemetryDatadog.ConfigTest do
       invalid_connect_timeout_config()
 
       assert {:error, :invalid_config, message} = Config.load()
-      assert message =~ "DD_EXPORT_CONNECT_TIMEOUT_MS must be a positive integer"
+      assert message =~ "DD_EXPORT_CONNECT_TIMEOUT_MS must be a valid integer"
     end
 
     test "returns error for negative connect timeout" do

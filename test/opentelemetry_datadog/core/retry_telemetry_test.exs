@@ -275,18 +275,23 @@ defmodule OpentelemetryDatadog.Core.RetryTelemetryTest do
         Retry.with_retry(slow_request, max_attempts: 2, log_level: :info)
       end)
 
+      # Get the start event to extract retry_id for filtering
       assert_received {:telemetry_event, [:opentelemetry_datadog, :retry, :start], measurements,
-                       _}
+                       metadata}
 
       assert measurements.system_time > 0
+      retry_id = metadata.retry_id
 
+      # Filter subsequent events by retry_id to avoid interference
       assert_received {:telemetry_event, [:opentelemetry_datadog, :retry, :attempt], measurements,
-                       _}
+                       %{retry_id: ^retry_id}}
 
       assert measurements.duration >= 0
       assert measurements.delay >= 50 and measurements.delay <= 150
 
-      assert_received {:telemetry_event, [:opentelemetry_datadog, :retry, :stop], measurements, _}
+      assert_received {:telemetry_event, [:opentelemetry_datadog, :retry, :stop], measurements,
+                       %{retry_id: ^retry_id}}
+
       assert measurements.duration >= 0
       assert measurements.total_attempts == 2
     end
