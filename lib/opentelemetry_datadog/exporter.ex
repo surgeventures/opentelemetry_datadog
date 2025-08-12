@@ -42,14 +42,9 @@ defmodule OpentelemetryDatadog.Exporter do
     ]
   end
 
-<<<<<<< HEAD
-  alias OpentelemetryDatadog.{Mapper, SpanUtils, Encoder}
-  alias OpentelemetryDatadog.Core.Retry
-  alias OpentelemetryDatadog.Exporter.Shared
-=======
   alias OpentelemetryDatadog.{Mapper, Encoder}
   alias OpentelemetryDatadog.{Utils.Exporter, Utils.Span}
->>>>>>> revert-3-revert-2-env-based-configuration
+  alias OpentelemetryDatadog.Core.Retry
   alias OpentelemetryDatadog.SpanProcessor
 
   @mappers [
@@ -64,13 +59,9 @@ defmodule OpentelemetryDatadog.Exporter do
     state = %State{
       host: Keyword.fetch!(config, :host),
       port: Keyword.fetch!(config, :port),
-<<<<<<< HEAD
-      container_id: SpanUtils.get_container_id(),
+      container_id: Span.get_container_id(),
       timeout_ms: Keyword.get(config, :timeout_ms, 2000),
       connect_timeout_ms: Keyword.get(config, :connect_timeout_ms, 500),
-=======
-      container_id: Span.get_container_id(),
->>>>>>> revert-3-revert-2-env-based-configuration
       protocol: protocol
     }
 
