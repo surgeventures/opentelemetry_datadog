@@ -310,6 +310,7 @@ defmodule OpentelemetryDatadog.Exporter do
       # Exception handling
       {:exception, exception} ->
         {:unknown_error, "Exception: #{Exception.message(exception)}"}
+
       # Connection refused - agent is down
       {:error, %Mint.TransportError{reason: :econnrefused}} ->
         {:agent_unavailable, "connection refused"}

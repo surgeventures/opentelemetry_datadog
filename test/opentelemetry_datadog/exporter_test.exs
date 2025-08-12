@@ -432,8 +432,6 @@ defmodule OpentelemetryDatadog.ExporterTest do
     end
   end
 
-
-
   describe "configuration error handling" do
     test "handles invalid port configuration gracefully" do
       invalid_port_config()

@@ -9,7 +9,8 @@ defmodule OpentelemetryDatadog.TelemetryTest do
     [:opentelemetry_datadog, :export, :start],
     [:opentelemetry_datadog, :export, :stop],
     [:opentelemetry_datadog, :export, :error],
-    [:opentelemetry_datadog, :export, :exception]
+    [:opentelemetry_datadog, :export, :exception],
+    [:opentelemetry_datadog, :export, :failure]
   ]
 
   defp capture_telemetry_events(event_names, fun) do
@@ -100,18 +101,27 @@ defmodule OpentelemetryDatadog.TelemetryTest do
     end
 
     test "telemetry events can be emitted manually" do
+      test_id = "manual_emit_#{:erlang.unique_integer()}"
+
+      # Clear any existing events
+      receive do
+        {:telemetry_event, _, _, _} -> :ok
+      after
+        0 -> :ok
+      end
+
       {_result, events} =
         capture_telemetry_events(@telemetry_events, fn ->
           :telemetry.execute(
             @telemetry_events |> Enum.at(0),
             %{system_time: System.system_time(), span_count: 3},
-            %{endpoint: "/v0.5/traces", host: "localhost", port: 8126}
+            %{endpoint: "/v0.5/traces", host: "localhost", port: 8126, test_id: test_id}
           )
 
           :telemetry.execute(
             @telemetry_events |> Enum.at(1),
             %{duration: 1_000_000, status_code: 200, span_count: 3},
-            %{endpoint: "/v0.5/traces", host: "localhost", port: 8126}
+            %{endpoint: "/v0.5/traces", host: "localhost", port: 8126, test_id: test_id}
           )
 
           :telemetry.execute(@telemetry_events |> Enum.at(2), %{span_count: 3}, %{
@@ -119,7 +129,8 @@ defmodule OpentelemetryDatadog.TelemetryTest do
             endpoint: "/v0.5/traces",
             host: "localhost",
             port: 8126,
-            retry: true
+            retry: true,
+            test_id: test_id
           })
 
           :telemetry.execute(@telemetry_events |> Enum.at(3), %{span_count: 3}, %{
@@ -128,45 +139,79 @@ defmodule OpentelemetryDatadog.TelemetryTest do
             stacktrace: [],
             endpoint: "/v0.5/traces",
             host: "localhost",
-            port: 8126
+            port: 8126,
+            test_id: test_id
+          })
+
+          :telemetry.execute(@telemetry_events |> Enum.at(4), %{span_count: 3, trace_count: 2}, %{
+            reason: "Connection refused",
+            failure_type: :agent_unavailable,
+            trace_ids: [123_456_789, 987_654_321],
+            host: "localhost",
+            port: 8126,
+            endpoint: "/v0.5/traces",
+            test_id: test_id
           })
 
           :ok
         end)
 
-      assert length(events) == 4
+      # Filter events to only those we manually emitted (with our test_id)
+      filtered_events =
+        Enum.filter(events, fn {_event, _measurements, metadata} ->
+          metadata[:test_id] == test_id
+        end)
+
+      assert length(filtered_events) == 5
 
       [
         {[:start, 3], :span_count},
         {[:stop, 3], :status_code},
         {[:error, 3], :error},
-        {[:exception, 3], :reason}
+        {[:exception, 3], :reason},
+        {[:failure, 3], :failure_type}
       ]
       |> Enum.with_index()
       |> Enum.each(fn
         {{[:start, sc], _attr}, idx} ->
-          {event, meas, meta} = Enum.at(events, idx)
+          {event, meas, meta} = Enum.at(filtered_events, idx)
           assert event == Enum.at(@telemetry_events, idx)
           assert meas.span_count == sc
           assert meta.endpoint == "/v0.5/traces"
+          assert meta.test_id == test_id
 
         {{[:stop, sc], _attr}, idx} ->
-          {_event, meas, meta} = Enum.at(events, idx)
+          {_event, meas, meta} = Enum.at(filtered_events, idx)
           assert meas.status_code == 200
           assert meas.span_count == sc
           assert meta.endpoint == "/v0.5/traces"
+          assert meta.test_id == test_id
 
         {{[:error, sc], _attr}, idx} ->
-          {_, meas, meta} = Enum.at(events, idx)
+          {_, meas, meta} = Enum.at(filtered_events, idx)
           assert meas.span_count == sc
           assert meta.error == "Connection refused"
           assert meta.retry == true
+          assert meta.test_id == test_id
 
         {{[:exception, sc], _attr}, idx} ->
-          {_, meas, meta} = Enum.at(events, idx)
+          {_, meas, meta} = Enum.at(filtered_events, idx)
           assert meas.span_count == sc
           assert meta.kind == RuntimeError
           assert meta.reason == "Encoding failed"
+          assert meta.test_id == test_id
+
+        {{[:failure, sc], _attr}, idx} ->
+          {_, meas, meta} = Enum.at(filtered_events, idx)
+          assert meas.span_count == sc
+          assert meas.trace_count == 2
+          assert meta.reason == "Connection refused"
+          assert meta.failure_type == :agent_unavailable
+          assert meta.trace_ids == [123_456_789, 987_654_321]
+          assert meta.host == "localhost"
+          assert meta.port == 8126
+          assert meta.endpoint == "/v0.5/traces"
+          assert meta.test_id == test_id
       end)
     end
 
@@ -188,7 +233,7 @@ defmodule OpentelemetryDatadog.TelemetryTest do
     test "exporter handles metrics export without telemetry" do
       # Let any async events from other tests settle
       Process.sleep(10)
-      
+
       state = %Exporter.State{
         protocol: :v05,
         host: "localhost",
@@ -206,14 +251,15 @@ defmodule OpentelemetryDatadog.TelemetryTest do
           after
             0 -> :ok
           end
-          
+
           Exporter.export(:metrics, nil, nil, state)
         end)
 
       # Filter events to only those from our test (localhost:8126) vs others (unreachable-host-12345)
-      filtered_events = Enum.filter(events, fn {_event, _measurements, metadata} ->
-        metadata[:host] == "localhost" and metadata[:port] == 8126
-      end)
+      filtered_events =
+        Enum.filter(events, fn {_event, _measurements, metadata} ->
+          metadata[:host] == "localhost" and metadata[:port] == 8126
+        end)
 
       assert result == :ok
       assert filtered_events == []
@@ -223,7 +269,7 @@ defmodule OpentelemetryDatadog.TelemetryTest do
       Enum.each(@telemetry_events, fn [app, op, event] ->
         assert app == :opentelemetry_datadog
         assert op == :export
-        assert event in [:start, :stop, :error, :exception]
+        assert event in [:start, :stop, :error, :exception, :failure]
       end)
     end
   end
