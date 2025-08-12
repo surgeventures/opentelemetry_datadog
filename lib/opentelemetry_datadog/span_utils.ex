@@ -1,6 +1,6 @@
 defmodule OpentelemetryDatadog.SpanUtils do
   @moduledoc """
-  Common utilities for span processing shared between v0.4 and v0.5 exporters.
+  Common utilities for span processing in Datadog exporters.
   """
 
   @doc "Converts various term types to strings for metadata."

@@ -6,19 +6,9 @@ defmodule OpentelemetryDatadog.SpanProcessorTest do
   alias OpentelemetryDatadog.SpanProcessor
 
   describe "SpanProcessor protocol" do
-    test "V04 processor struct exists" do
-      processor = %SpanProcessor.V04{}
-      assert processor.__struct__ == SpanProcessor.V04
-    end
-
     test "V05 processor struct exists" do
       processor = %SpanProcessor.V05{}
       assert processor.__struct__ == SpanProcessor.V05
-    end
-
-    test "protocol implementation exists for V04" do
-      assert SpanProcessor.impl_for(%SpanProcessor.V04{}) ==
-               SpanProcessor.OpentelemetryDatadog.SpanProcessor.V04
     end
 
     test "protocol implementation exists for V05" do

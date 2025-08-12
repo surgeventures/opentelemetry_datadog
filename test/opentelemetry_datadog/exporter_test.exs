@@ -1,8 +1,8 @@
-defmodule OpentelemetryDatadog.V05.ExporterTest do
+defmodule OpentelemetryDatadog.ExporterTest do
   use ExUnit.Case, async: true
   use OpentelemetryDatadog.TestHelpers
 
-  alias OpentelemetryDatadog.V05.Exporter
+  alias OpentelemetryDatadog.Exporter
 
   describe "init/1" do
     test "initializes with v05 protocol" do
@@ -32,7 +32,7 @@ defmodule OpentelemetryDatadog.V05.ExporterTest do
       prod_config("api-service", "v2.1.0")
       {:ok, config} = OpentelemetryDatadog.Config.load()
       exporter_config = OpentelemetryDatadog.Config.to_exporter_config(config)
-      v05_config = OpentelemetryDatadog.V05.Config.to_v05_exporter_config(exporter_config)
+      v05_config = OpentelemetryDatadog.Config.to_exporter_config_with_protocol(exporter_config)
 
       assert {:ok, state} = Exporter.init(v05_config)
       assert state.protocol == :v05
@@ -44,7 +44,7 @@ defmodule OpentelemetryDatadog.V05.ExporterTest do
       dev_config("test-service")
       {:ok, config} = OpentelemetryDatadog.Config.load()
       exporter_config = OpentelemetryDatadog.Config.to_exporter_config(config)
-      v05_config = OpentelemetryDatadog.V05.Config.to_v05_exporter_config(exporter_config)
+      v05_config = OpentelemetryDatadog.Config.to_exporter_config_with_protocol(exporter_config)
 
       assert {:ok, state} = Exporter.init(v05_config)
       assert state.protocol == :v05

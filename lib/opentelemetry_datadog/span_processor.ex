@@ -15,35 +15,6 @@ defprotocol OpentelemetryDatadog.SpanProcessor do
   def process_span(processor, span_record, data, state)
 end
 
-defmodule OpentelemetryDatadog.SpanProcessor.V04 do
-  @moduledoc """
-  Span processor for v0.4 Datadog traces format.
-  """
-
-  defstruct []
-
-  alias OpentelemetryDatadog.Exporter.Shared
-
-  defimpl OpentelemetryDatadog.SpanProcessor do
-    def process_span(_processor, span_record, data, state) do
-      processing_state = Shared.build_processing_state(span_record, data)
-
-      dd_span = Shared.format_span_base(span_record, data, state)
-      dd_span = %{dd_span | meta: Map.put(dd_span.meta, :env, "hans-local-testing")}
-
-      case Shared.apply_mappers(
-             state.mappers,
-             dd_span,
-             Shared.get_span(span_record),
-             processing_state
-           ) do
-        nil -> []
-        span -> [Map.delete(span, :__struct__)]
-      end
-    end
-  end
-end
-
 defmodule OpentelemetryDatadog.SpanProcessor.V05 do
   @moduledoc """
   Span processor for v0.5 Datadog traces format.

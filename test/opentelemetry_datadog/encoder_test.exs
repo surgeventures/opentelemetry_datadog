@@ -1,7 +1,7 @@
-defmodule OpentelemetryDatadog.V05.EncoderTest do
+defmodule OpentelemetryDatadog.EncoderTest do
   use ExUnit.Case, async: true
 
-  alias OpentelemetryDatadog.V05.Encoder
+  alias OpentelemetryDatadog.Encoder
 
   describe "encode/1" do
     test "encodes valid spans to MessagePack" do

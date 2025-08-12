@@ -2,7 +2,7 @@ defmodule OpentelemetryDatadog.Exporter.Shared do
   @moduledoc """
   Shared utilities for OpenTelemetry Datadog exporters.
 
-  Contains common functionality used by both v0.4 and v0.5 exporters
+  Contains common functionality used by Datadog exporters
   to eliminate code duplication.
   """
 
