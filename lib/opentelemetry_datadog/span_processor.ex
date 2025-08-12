@@ -22,28 +22,28 @@ defmodule OpentelemetryDatadog.SpanProcessor.V05 do
 
   defstruct []
 
-  alias OpentelemetryDatadog.{Exporter.Shared, SpanUtils}
+  alias OpentelemetryDatadog.{Utils.Exporter, Utils.Span}
 
   defimpl OpentelemetryDatadog.SpanProcessor do
     def process_span(_processor, span_record, data, state) do
-      processing_state = Shared.build_processing_state(span_record, data)
+      processing_state = Exporter.build_processing_state(span_record, data)
 
-      dd_span = Shared.format_span_base(span_record, data, state)
-      dd_span_kind = Atom.to_string(Keyword.fetch!(Shared.get_span(span_record), :kind))
+      dd_span = Exporter.format_span_base(span_record, data, state)
+      dd_span_kind = Atom.to_string(Keyword.fetch!(Exporter.get_span(span_record), :kind))
 
       dd_span = %{
         dd_span
-        | meta: Map.put(dd_span.meta, :env, SpanUtils.get_env_from_resource(data)),
-          service: SpanUtils.get_service_from_resource(data),
-          resource: SpanUtils.get_resource_from_span(dd_span.name, dd_span.meta),
-          type: SpanUtils.get_type_from_span(dd_span_kind),
+        | meta: Map.put(dd_span.meta, :env, Span.get_env_from_resource(data)),
+          service: Span.get_service_from_resource(data),
+          resource: Span.get_resource_from_span(dd_span.name, dd_span.meta),
+          type: Span.get_type_from_span(dd_span_kind),
           error: 0
       }
 
-      case Shared.apply_mappers(
+      case Exporter.apply_mappers(
              state.mappers,
              dd_span,
-             Shared.get_span(span_record),
+             Exporter.get_span(span_record),
              processing_state
            ) do
         nil ->

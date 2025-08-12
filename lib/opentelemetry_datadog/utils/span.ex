@@ -1,4 +1,4 @@
-defmodule OpentelemetryDatadog.SpanUtils do
+defmodule OpentelemetryDatadog.Utils.Span do
   @moduledoc """
   Common utilities for span processing in Datadog exporters.
   """
@@ -21,12 +21,12 @@ defmodule OpentelemetryDatadog.SpanUtils do
 
   ## Examples
 
-      iex> OpentelemetryDatadog.SpanUtils.id_to_datadog_id(nil)
+      iex> OpentelemetryDatadog.Utils.Span.id_to_datadog_id(nil)
       nil
       
       iex> # Simple example with known values
       iex> trace_id = 0x123456789ABCDEF0FEDCBA0987654321
-      iex> OpentelemetryDatadog.SpanUtils.id_to_datadog_id(trace_id)
+      iex> OpentelemetryDatadog.Utils.Span.id_to_datadog_id(trace_id)
       1311768467463790320
   """
   @spec id_to_datadog_id(integer() | nil) :: integer() | nil
@@ -43,11 +43,11 @@ defmodule OpentelemetryDatadog.SpanUtils do
   ## Examples
 
       iex> data = %{resource_map: %{"service.name" => "my-service"}}
-      iex> OpentelemetryDatadog.SpanUtils.get_service_from_resource(data)
+      iex> OpentelemetryDatadog.Utils.Span.get_service_from_resource(data)
       "my-service"
       
       iex> data = %{resource_map: %{}}
-      iex> OpentelemetryDatadog.SpanUtils.get_service_from_resource(data)
+      iex> OpentelemetryDatadog.Utils.Span.get_service_from_resource(data)
       "unknown-service"
   """
   @spec get_service_from_resource(map()) :: String.t()
@@ -64,11 +64,11 @@ defmodule OpentelemetryDatadog.SpanUtils do
   ## Examples
 
       iex> data = %{resource_map: %{"deployment.environment" => "production"}}
-      iex> OpentelemetryDatadog.SpanUtils.get_env_from_resource(data)
+      iex> OpentelemetryDatadog.Utils.Span.get_env_from_resource(data)
       "production"
       
       iex> data = %{resource_map: %{}}
-      iex> OpentelemetryDatadog.SpanUtils.get_env_from_resource(data)
+      iex> OpentelemetryDatadog.Utils.Span.get_env_from_resource(data)
       "unknown"
   """
   @spec get_env_from_resource(map()) :: String.t()
@@ -88,11 +88,11 @@ defmodule OpentelemetryDatadog.SpanUtils do
   ## Examples
 
       iex> meta = %{"http.method" => "GET", "http.route" => "/api/users"}
-      iex> OpentelemetryDatadog.SpanUtils.get_resource_from_span("web.request", meta)
+      iex> OpentelemetryDatadog.Utils.Span.get_resource_from_span("web.request", meta)
       "GET /api/users"
       
       iex> meta = %{}
-      iex> OpentelemetryDatadog.SpanUtils.get_resource_from_span("db.query", meta)
+      iex> OpentelemetryDatadog.Utils.Span.get_resource_from_span("db.query", meta)
       "db.query"
   """
   @spec get_resource_from_span(String.t(), map()) :: String.t()
@@ -108,13 +108,13 @@ defmodule OpentelemetryDatadog.SpanUtils do
 
   ## Examples
 
-      iex> OpentelemetryDatadog.SpanUtils.get_type_from_span("server")
+      iex> OpentelemetryDatadog.Utils.Span.get_type_from_span("server")
       "web"
       
-      iex> OpentelemetryDatadog.SpanUtils.get_type_from_span("client")
+      iex> OpentelemetryDatadog.Utils.Span.get_type_from_span("client")
       "http"
       
-      iex> OpentelemetryDatadog.SpanUtils.get_type_from_span("unknown")
+      iex> OpentelemetryDatadog.Utils.Span.get_type_from_span("unknown")
       "custom"
   """
   @spec get_type_from_span(String.t()) :: String.t()
@@ -137,7 +137,7 @@ defmodule OpentelemetryDatadog.SpanUtils do
 
   ## Examples
 
-      iex> OpentelemetryDatadog.SpanUtils.get_container_id()
+      iex> OpentelemetryDatadog.Utils.Span.get_container_id()
       nil  # or container ID string if running in container
   """
   @spec get_container_id() :: String.t() | nil

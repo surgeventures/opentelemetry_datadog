@@ -176,9 +176,9 @@ defmodule OpentelemetryDatadog.ExporterTest do
 
   describe "helper functions" do
     test "uses SpanUtils for common functionality" do
-      assert OpentelemetryDatadog.SpanUtils.nil_if_undefined(:undefined) == nil
-      assert OpentelemetryDatadog.SpanUtils.nil_if_undefined("value") == "value"
-      assert OpentelemetryDatadog.SpanUtils.nil_if_undefined(123) == 123
+      assert OpentelemetryDatadog.Utils.Span.nil_if_undefined(:undefined) == nil
+      assert OpentelemetryDatadog.Utils.Span.nil_if_undefined("value") == "value"
+      assert OpentelemetryDatadog.Utils.Span.nil_if_undefined(123) == 123
     end
 
     test "exporter module has required functions" do
@@ -383,7 +383,7 @@ defmodule OpentelemetryDatadog.ExporterTest do
       # Mock mappers that just pass through
       mappers = []
 
-      result = OpentelemetryDatadog.Exporter.Shared.apply_mappers(mappers, span, nil, %{})
+      result = OpentelemetryDatadog.Utils.Exporter.apply_mappers(mappers, span, nil, %{})
       assert result == span
     end
 
@@ -401,7 +401,7 @@ defmodule OpentelemetryDatadog.ExporterTest do
 
       mappers = [{TestMapper, []}]
 
-      result = OpentelemetryDatadog.Exporter.Shared.apply_mappers(mappers, span, nil, %{})
+      result = OpentelemetryDatadog.Utils.Exporter.apply_mappers(mappers, span, nil, %{})
       assert result == nil
     end
   end

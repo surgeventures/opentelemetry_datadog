@@ -1,9 +1,9 @@
-defmodule OpentelemetryDatadog.Exporter.Shared do
+defmodule OpentelemetryDatadog.Utils.Exporter do
   @moduledoc """
-  Shared utilities for OpenTelemetry Datadog exporters.
+  Utilities for the OpenTelemetry Datadog exporter.
 
-  Contains common functionality used by Datadog exporters
-  to eliminate code duplication.
+  Contains common functionality used by the Datadog exporter
+  for span processing, HTTP handling, and data transformation.
   """
 
   require Record
@@ -23,7 +23,7 @@ defmodule OpentelemetryDatadog.Exporter.Shared do
     Record.extract(:resource, from: "#{@deps_dir}/opentelemetry/src/otel_resource.erl")
   )
 
-  alias OpentelemetryDatadog.{DatadogSpan, SpanUtils}
+  alias OpentelemetryDatadog.{DatadogSpan, Utils.Span}
 
   @type mapper_config :: {module(), any()}
   @type otel_span :: Keyword.t()
@@ -60,7 +60,7 @@ defmodule OpentelemetryDatadog.Exporter.Shared do
   @doc """
   Formats an OpenTelemetry span into a DatadogSpan structure.
 
-  This is the base formatting logic shared between exporters.
+  This is the base formatting logic used by the exporter.
   Version-specific formatting should be handled by the caller.
   """
   @spec format_span_base(span_record(), span_data(), map()) :: DatadogSpan.t()
@@ -76,15 +76,15 @@ defmodule OpentelemetryDatadog.Exporter.Shared do
     meta =
       Keyword.fetch!(attributes_data, :map)
       |> Map.put(:"span.kind", dd_span_kind)
-      |> Enum.map(fn {k, v} -> {k, SpanUtils.term_to_string(v)} end)
+      |> Enum.map(fn {k, v} -> {k, Span.term_to_string(v)} end)
       |> Enum.into(%{})
 
     name = Keyword.fetch!(span, :name)
 
     %DatadogSpan{
-      trace_id: SpanUtils.id_to_datadog_id(Keyword.fetch!(span, :trace_id)),
+      trace_id: Span.id_to_datadog_id(Keyword.fetch!(span, :trace_id)),
       span_id: Keyword.fetch!(span, :span_id),
-      parent_id: SpanUtils.nil_if_undefined(Keyword.fetch!(span, :parent_span_id)),
+      parent_id: Span.nil_if_undefined(Keyword.fetch!(span, :parent_span_id)),
       name: name,
       start: start_time_nanos,
       duration: end_time_nanos - start_time_nanos,
