@@ -289,19 +289,18 @@ defmodule OpentelemetryDatadog.Config do
   defp validate_sample_rate_env(_),
     do: {:error, :invalid_config, "DD_TRACE_SAMPLE_RATE must be a float between 0.0 and 1.0"}
 
-<<<<<<< HEAD
-  @spec validate_timeout_ms_env(any()) :: :ok | validation_error()
+  @spec validate_timeout_ms_env(any()) :: :ok | {:error, validation_error()}
   defp validate_timeout_ms_env(timeout) when is_integer(timeout) and timeout > 0, do: :ok
 
   defp validate_timeout_ms_env(_),
     do: {:error, :invalid_config, "DD_EXPORT_TIMEOUT_MS must be a positive integer"}
 
-  @spec validate_connect_timeout_ms_env(any()) :: :ok | validation_error()
+  @spec validate_connect_timeout_ms_env(any()) :: :ok | {:error, validation_error()}
   defp validate_connect_timeout_ms_env(timeout) when is_integer(timeout) and timeout > 0, do: :ok
 
   defp validate_connect_timeout_ms_env(_),
     do: {:error, :invalid_config, "DD_EXPORT_CONNECT_TIMEOUT_MS must be a positive integer"}
-=======
+
   # V0.5 Exporter Configuration Functions
 
   @doc """
@@ -474,5 +473,4 @@ defmodule OpentelemetryDatadog.Config do
       {:error, type, message} -> raise ConfigError, {type, message}
     end
   end
->>>>>>> revert-3-revert-2-env-based-configuration
 end

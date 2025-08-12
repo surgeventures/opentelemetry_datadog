@@ -56,10 +56,10 @@ defmodule OpentelemetryDatadog.ExporterTest do
 
       result = Exporter.export(:metrics, nil, resource, state)
       assert result == :ok
-=======
-  use OpentelemetryDatadog.TestHelpers
+    end
+  end
 
-  alias OpentelemetryDatadog.Exporter
+  use OpentelemetryDatadog.TestHelpers
 
   describe "init/1" do
     test "initializes with v05 protocol" do
@@ -114,6 +114,38 @@ defmodule OpentelemetryDatadog.ExporterTest do
       assert_raise KeyError, fn ->
         Exporter.init(config)
       end
+    end
+
+    test "initializes state correctly with timeouts" do
+      config = [
+        host: "test-host",
+        port: 9999,
+        timeout_ms: 3000,
+        connect_timeout_ms: 1000
+      ]
+
+      {:ok, state} = Exporter.init(config)
+
+      assert state.host == "test-host"
+      assert state.port == 9999
+      assert state.timeout_ms == 3000
+      assert state.connect_timeout_ms == 1000
+      assert state.protocol == :v05
+    end
+
+    test "uses default values when not provided" do
+      config = [
+        host: "test-host",
+        port: 8126
+      ]
+
+      {:ok, state} = Exporter.init(config)
+
+      assert state.host == "test-host"
+      assert state.port == 8126
+      assert state.timeout_ms == 2000
+      assert state.connect_timeout_ms == 500
+      assert state.protocol == :v05
     end
   end
 
@@ -384,54 +416,23 @@ defmodule OpentelemetryDatadog.ExporterTest do
       # Skip this test for now as it requires complex OpenTelemetry record setup
       # The main functionality is tested through unit tests of individual functions
       assert true
->>>>>>> revert-3-revert-2-env-based-configuration
     end
   end
 
   describe "shutdown/1" do
-<<<<<<< HEAD
     test "shutdown returns :ok" do
       state = %Exporter.State{}
       result = Exporter.shutdown(state)
       assert result == :ok
     end
-  end
 
-  describe "init/1" do
-    test "initializes state correctly" do
-      config = [
-        host: "test-host",
-        port: 9999,
-        timeout_ms: 3000,
-        connect_timeout_ms: 1000
-      ]
-
-      {:ok, state} = Exporter.init(config)
-
-      assert state.host == "test-host"
-      assert state.port == 9999
-      assert state.timeout_ms == 3000
-      assert state.connect_timeout_ms == 1000
-    end
-
-    test "uses default values when not provided" do
-      config = [
-        host: "test-host",
-        port: 8126
-      ]
-
-      {:ok, state} = Exporter.init(config)
-
-      assert state.host == "test-host"
-      assert state.port == 8126
-      assert state.timeout_ms == 2000
-      assert state.connect_timeout_ms == 500
-=======
     test "shuts down cleanly" do
       state = %Exporter.State{}
       assert Exporter.shutdown(state) == :ok
     end
   end
+
+
 
   describe "configuration error handling" do
     test "handles invalid port configuration gracefully" do
@@ -463,7 +464,7 @@ defmodule OpentelemetryDatadog.ExporterTest do
       assert {:ok, state} = Exporter.init(exporter_config)
       assert state.host == config.host
       assert state.port == config.port
->>>>>>> revert-3-revert-2-env-based-configuration
+      assert state.protocol == :v05
     end
   end
 end

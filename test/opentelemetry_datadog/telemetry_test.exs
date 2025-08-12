@@ -186,15 +186,37 @@ defmodule OpentelemetryDatadog.TelemetryTest do
     end
 
     test "exporter handles metrics export without telemetry" do
-      state = %Exporter.State{protocol: :v05}
+      # Let any async events from other tests settle
+      Process.sleep(10)
+      
+      state = %Exporter.State{
+        protocol: :v05,
+        host: "localhost",
+        port: 8126,
+        container_id: "test-container",
+        timeout_ms: 2000,
+        connect_timeout_ms: 500
+      }
 
       {result, events} =
         capture_telemetry_events(@telemetry_events, fn ->
+          # Clear any pending events first
+          receive do
+            {:telemetry_event, _, _, _} -> :ok
+          after
+            0 -> :ok
+          end
+          
           Exporter.export(:metrics, nil, nil, state)
         end)
 
+      # Filter events to only those from our test (localhost:8126) vs others (unreachable-host-12345)
+      filtered_events = Enum.filter(events, fn {_event, _measurements, metadata} ->
+        metadata[:host] == "localhost" and metadata[:port] == 8126
+      end)
+
       assert result == :ok
-      assert events == []
+      assert filtered_events == []
     end
 
     test "telemetry event names follow correct pattern" do

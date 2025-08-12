@@ -36,21 +36,14 @@ defmodule OpentelemetryDatadog.Exporter do
       :port,
       :service_name,
       :container_id,
-<<<<<<< HEAD
       :timeout_ms,
-      :connect_timeout_ms
-    ]
-  end
-
-  alias OpentelemetryDatadog.{Mapper, SpanUtils}
-  alias OpentelemetryDatadog.Core.Retry
-=======
+      :connect_timeout_ms,
       :protocol
     ]
   end
 
   alias OpentelemetryDatadog.{Mapper, SpanUtils, Encoder}
->>>>>>> revert-3-revert-2-env-based-configuration
+  alias OpentelemetryDatadog.Core.Retry
   alias OpentelemetryDatadog.Exporter.Shared
   alias OpentelemetryDatadog.SpanProcessor
 
