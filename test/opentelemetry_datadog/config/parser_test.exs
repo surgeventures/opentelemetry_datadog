@@ -1,5 +1,6 @@
 defmodule OpentelemetryDatadog.Config.ParserTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
+
   import OpentelemetryDatadog.TestHelpers
 
   alias OpentelemetryDatadog.Config.Parser

@@ -76,6 +76,9 @@ defmodule OpentelemetryDatadog.TestHelpers do
   defdelegate port_out_of_range_config(), to: OpentelemetryDatadog.ErrorScenarios
   defdelegate malformed_tags_config(), to: OpentelemetryDatadog.ErrorScenarios
   defdelegate missing_required_host_config(), to: OpentelemetryDatadog.ErrorScenarios
+  defdelegate invalid_connect_timeout_config(), to: OpentelemetryDatadog.ErrorScenarios
+  defdelegate negative_connect_timeout_config(), to: OpentelemetryDatadog.ErrorScenarios
+  defdelegate zero_connect_timeout_config(), to: OpentelemetryDatadog.ErrorScenarios
   defdelegate all_error_scenarios(), to: OpentelemetryDatadog.ErrorScenarios
   defdelegate apply_scenario(scenario_name), to: OpentelemetryDatadog.ErrorScenarios
 end

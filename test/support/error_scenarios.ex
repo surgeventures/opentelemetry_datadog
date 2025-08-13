@@ -65,6 +65,33 @@ defmodule OpentelemetryDatadog.ErrorScenarios do
     })
   end
 
+  @doc "Sets up configuration with invalid connect timeout."
+  @spec invalid_connect_timeout_config() :: :ok
+  def invalid_connect_timeout_config do
+    EnvHelpers.put_env(%{
+      "DD_AGENT_HOST" => "localhost",
+      "DD_EXPORT_CONNECT_TIMEOUT_MS" => "invalid"
+    })
+  end
+
+  @doc "Sets up configuration with negative connect timeout."
+  @spec negative_connect_timeout_config() :: :ok
+  def negative_connect_timeout_config do
+    EnvHelpers.put_env(%{
+      "DD_AGENT_HOST" => "localhost",
+      "DD_EXPORT_CONNECT_TIMEOUT_MS" => "-500"
+    })
+  end
+
+  @doc "Sets up configuration with zero connect timeout."
+  @spec zero_connect_timeout_config() :: :ok
+  def zero_connect_timeout_config do
+    EnvHelpers.put_env(%{
+      "DD_AGENT_HOST" => "localhost",
+      "DD_EXPORT_CONNECT_TIMEOUT_MS" => "0"
+    })
+  end
+
   @doc """
   Generates a list of all available error scenario functions.
 
@@ -77,7 +104,10 @@ defmodule OpentelemetryDatadog.ErrorScenarios do
       :invalid_sample_rate_config,
       :port_out_of_range_config,
       :malformed_tags_config,
-      :missing_required_host_config
+      :missing_required_host_config,
+      :invalid_connect_timeout_config,
+      :negative_connect_timeout_config,
+      :zero_connect_timeout_config
     ]
   end
 

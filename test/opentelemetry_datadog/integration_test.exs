@@ -1,8 +1,9 @@
 defmodule OpentelemetryDatadog.IntegrationTest do
   use ExUnit.Case, async: false
-  @moduletag :integration
 
   import OpentelemetryDatadog.TestHelpers
+
+  @moduletag :integration
 
   setup do
     reset_env()

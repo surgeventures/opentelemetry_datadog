@@ -10,7 +10,9 @@ defmodule OpentelemetryDatadog.DatadogConstants do
     "DD_VERSION",
     "DD_ENV",
     "DD_TAGS",
-    "DD_TRACE_SAMPLE_RATE"
+    "DD_TRACE_SAMPLE_RATE",
+    "DD_EXPORT_TIMEOUT_MS",
+    "DD_EXPORT_CONNECT_TIMEOUT_MS"
   ]
 
   @doc "Returns list of all supported Datadog environment variables."
@@ -24,13 +26,25 @@ defmodule OpentelemetryDatadog.DatadogConstants do
     service: nil,
     version: nil,
     env: nil,
-    tags: nil
+    tags: nil,
+    timeout_ms: 2000,
+    connect_timeout_ms: 500
   }
 
   def defaults, do: @defaults
 
   @doc "Get default value for a specific configuration key."
-  def default(key) when key in [:port, :sample_rate, :service, :version, :env, :tags] do
+  def default(key)
+      when key in [
+             :port,
+             :sample_rate,
+             :service,
+             :version,
+             :env,
+             :tags,
+             :timeout_ms,
+             :connect_timeout_ms
+           ] do
     Map.get(@defaults, key)
   end
 
