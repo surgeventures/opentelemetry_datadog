@@ -5,22 +5,24 @@ defmodule OpentelemetryDatadog do
 
   alias OpentelemetryDatadog.{Config, ConfigError}
 
-  @doc "Sets up the Datadog exporter with configuration from environment variables."
-  @spec setup() :: :ok | {:error, Config.validation_error()}
-  def setup do
-    case Config.load() do
-      {:ok, config} ->
-        config
-        |> Config.to_exporter_config()
-        |> setup()
+  @doc """
+  Validates Datadog exporter configuration from environment variables.
 
-      {:error, _, _} = error ->
-        error
-    end
-  end
+  This validates that all required environment variables are set correctly.
+  The actual exporter registration should be done via application config.
+
+  ## Examples
+
+      # With environment variables set
+      iex> System.put_env("DD_AGENT_HOST", "localhost") 
+      iex> OpentelemetryDatadog.setup()
+      :ok
+  """
+  @spec setup() :: :ok | {:error, Config.validation_error()}
+  def setup, do: Config.setup()
 
   @doc """
-  Sets up the Datadog exporter with the provided configuration.
+  Validates the provided Datadog exporter configuration.
 
   ## Examples
 
@@ -29,25 +31,10 @@ defmodule OpentelemetryDatadog do
       :ok
   """
   @spec setup(keyword()) :: :ok | {:error, Config.validation_error()}
-  def setup(config) when is_list(config) do
-    config_map = Enum.into(config, %{})
-
-    case Config.validate(config_map) do
-      :ok ->
-        # TODO: This function should actually register the Datadog exporter with OpenTelemetry,
-        # but currently only validates config. Users expect setup() to fully configure
-        # the exporter, not just validate it. Missing implementation should:
-        # 1. Create exporter instance: {:ok, pid} = OpentelemetryDatadog.Exporter.init(config)
-        # 2. Register with OTel: :otel_batch_processor.set_exporter(pid)
-        :ok
-
-      {:error, _, _} = error ->
-        error
-    end
-  end
+  def setup(config) when is_list(config), do: Config.setup(config)
 
   @doc """
-  Sets up the Datadog exporter, raising an exception on failure.
+  Validates Datadog exporter configuration, raising an exception on failure.
 
   ## Examples
 
@@ -65,7 +52,7 @@ defmodule OpentelemetryDatadog do
   end
 
   @doc """
-  Sets up the Datadog exporter with the provided configuration, raising an exception on failure.
+  Validates the provided Datadog exporter configuration, raising an exception on failure.
 
   ## Examples
 

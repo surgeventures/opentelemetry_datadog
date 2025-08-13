@@ -250,10 +250,10 @@ defmodule OpentelemetryDatadog.Config do
     do: {:error, :invalid_config, "DD_TRACE_SAMPLE_RATE must be a float between 0.0 and 1.0"}
 
   @doc """
-  Sets up the Datadog exporter with configuration from environment variables.
+  Validates Datadog exporter configuration from environment variables.
 
-  This is a convenience function that loads configuration from environment
-  variables and configures the exporter.
+  This loads and validates configuration from environment variables.
+  The actual exporter registration should be done via application config.
 
   ## Examples
 
@@ -276,7 +276,7 @@ defmodule OpentelemetryDatadog.Config do
   end
 
   @doc """
-  Sets up the Datadog exporter with the provided configuration.
+  Validates the provided Datadog exporter configuration.
 
   ## Examples
 
@@ -290,11 +290,6 @@ defmodule OpentelemetryDatadog.Config do
 
     case validate(config_map) do
       :ok ->
-        # TODO: This function should actually register the exporter with OpenTelemetry,
-        # but currently only validates config. Users expect setup() to fully configure
-        # the exporter, not just validate it. Missing implementation should:
-        # 1. Create exporter instance: {:ok, pid} = OpentelemetryDatadog.Exporter.init(config)
-        # 2. Register with OTel: :otel_batch_processor.set_exporter(pid)
         :ok
 
       {:error, _, _} = error ->
@@ -303,7 +298,7 @@ defmodule OpentelemetryDatadog.Config do
   end
 
   @doc """
-  Sets up the Datadog exporter, raising an exception on failure.
+  Validates Datadog exporter configuration, raising an exception on failure.
 
   ## Examples
 
@@ -321,7 +316,7 @@ defmodule OpentelemetryDatadog.Config do
   end
 
   @doc """
-  Sets up the Datadog exporter with the provided configuration, raising an exception on failure.
+  Validates the provided Datadog exporter configuration, raising an exception on failure.
 
   ## Examples
 
