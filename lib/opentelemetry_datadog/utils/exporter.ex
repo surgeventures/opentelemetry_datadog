@@ -23,7 +23,7 @@ defmodule OpentelemetryDatadog.Utils.Exporter do
     Record.extract(:resource, from: "#{@deps_dir}/opentelemetry/src/otel_resource.erl")
   )
 
-  alias OpentelemetryDatadog.{DatadogSpan, Utils.Span}
+  alias OpentelemetryDatadog.{DatadogSpan, ResourceAttributes, Utils.Span}
 
   @type mapper_config :: {module(), any()}
   @type otel_span :: Keyword.t()
@@ -193,5 +193,48 @@ defmodule OpentelemetryDatadog.Utils.Exporter do
       resource_attrs: attributes_data,
       resource_map: Keyword.fetch!(attributes_data, :map)
     }
+  end
+
+  @doc """
+  Builds enhanced resource data structure with extracted resource attributes.
+
+  This includes the standard resource data plus auto-extracted resource
+  attributes that follow OpenTelemetry semantic conventions.
+
+  ## Examples
+
+      iex> resource_tuple = build_test_resource()
+      iex> data = OpentelemetryDatadog.Utils.Exporter.build_enhanced_resource_data(resource_tuple)
+      iex> Map.has_key?(data, :resource_attributes)
+      true
+      iex> Map.has_key?(data.resource_attributes, "service.name")
+      true
+  """
+  @spec build_enhanced_resource_data(tuple()) :: map()
+  def build_enhanced_resource_data(resource) do
+    base_data = build_resource_data(resource)
+
+    # Extract standardized resource attributes
+    resource_attributes = ResourceAttributes.extract(resource)
+
+    Map.put(base_data, :resource_attributes, resource_attributes)
+  end
+
+  @doc """
+  Gets resource attributes from resource data.
+
+  Convenience function to extract resource attributes from already
+  processed resource data.
+
+  ## Examples
+
+      iex> data = %{resource_map: %{"service.name" => "my-service"}}
+      iex> attrs = OpentelemetryDatadog.Utils.Exporter.get_resource_attributes(data)
+      iex> attrs["service.name"]
+      "my-service"
+  """
+  @spec get_resource_attributes(map()) :: map()
+  def get_resource_attributes(resource_data) do
+    ResourceAttributes.from_resource_data(resource_data)
   end
 end
