@@ -1,13 +1,13 @@
 defmodule OpentelemetryDatadog.Mapper.InferDatadogFields do
   @behaviour OpentelemetryDatadog.Mapper
 
-  alias OpentelemetryDatadog.SpanUtils
+  alias OpentelemetryDatadog.Utils.Span
 
   @impl true
   def map(span, otel_span, _config, state) do
     meta = span.meta
 
-    service_name = SpanUtils.get_service_from_resource(state)
+    service_name = Span.get_service_from_resource(state)
 
     {:instrumentation_scope, scope_name, _version, _opts} =
       Keyword.fetch!(otel_span, :instrumentation_scope)

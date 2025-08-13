@@ -30,8 +30,13 @@ export DD_EXPORT_TIMEOUT_MS=5000
 export DD_EXPORT_CONNECT_TIMEOUT_MS=1000
 ```
 
+Configuration is loaded automatically when the exporter initializes. 
+You can validate configuration manually if needed:
+
 ```elixir
-OpentelemetryDatadog.setup()
+# Validate environment configuration
+{:ok, config} = OpentelemetryDatadog.Config.load()
+:ok = OpentelemetryDatadog.Config.validate(config)
 ```
 
 | Variable                      | Required | Default | Description |
@@ -48,14 +53,18 @@ OpentelemetryDatadog.setup()
 
 ### Manual Configuration
 
+You can validate configuration manually:
+
 ```elixir
-OpentelemetryDatadog.setup([
-  host: "localhost",
+config = [
+  host: "localhost", 
   port: 8126,
   service: "my-app",
-  version: "1.0.0",
+  version: "1.0.0", 
   env: "staging"
-])
+]
+
+:ok = OpentelemetryDatadog.Config.validate(config)
 ```
 
 ## OpenTelemetry Setup

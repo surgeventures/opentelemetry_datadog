@@ -42,10 +42,8 @@ defmodule OpentelemetryDatadog.Exporter do
     ]
   end
 
-  alias OpentelemetryDatadog.{Mapper, Encoder}
-  alias OpentelemetryDatadog.{Utils.Exporter, Utils.Span}
-  alias OpentelemetryDatadog.Core.Retry
-  alias OpentelemetryDatadog.SpanProcessor
+  alias OpentelemetryDatadog.{Mapper, Encoder, Formatter}
+  alias OpentelemetryDatadog.Utils.Span
 
   @mappers [
     {Mapper.LiftError, []},
@@ -69,72 +67,73 @@ defmodule OpentelemetryDatadog.Exporter do
   end
 
   @impl true
-  def export(:traces, tid, resource, %{protocol: :v05} = state) do
-    data = Exporter.build_resource_data(resource)
-
-    formatted =
-      :ets.foldl(
-        fn span, acc ->
-          case format_span_v05(span, data, state) do
-            [] ->
-              Logger.warning("Span skipped: #{inspect(span)}")
-              acc
-
-            span_data ->
-              [span_data | acc]
-          end
-        end,
-        [],
-        tid
-      )
-
-    count = Enum.count(formatted)
-
-    # Emit telemetry start event
-    start_time = System.monotonic_time()
-    system_time = System.system_time()
+  def export(:traces, tid, resource, state) do
     endpoint = "/v0.5/traces"
+    start_metadata = %{endpoint: endpoint, host: state.host, port: state.port}
 
-    :telemetry.execute(
-      [:opentelemetry_datadog, :export, :start],
-      %{system_time: system_time, span_count: count},
-      %{endpoint: endpoint, host: state.host, port: state.port}
-    )
+    :telemetry.span(
+      [:opentelemetry_datadog, :export],
+      start_metadata,
+      fn ->
+        data = Formatter.build_resource_data(resource)
 
-    try do
-      headers = Exporter.build_headers(count, state.container_id)
+        formatted =
+          :ets.foldl(
+            fn span, acc ->
+              case format_span_v05(span, data, state) do
+                [] ->
+                  Logger.warning("Span skipped: #{inspect(span)}")
+                  acc
 
-      response =
-        formatted
-        |> encode_v05()
-        |> push_v05(headers, state)
-
-      duration = System.monotonic_time() - start_time
-
-      case response do
-        {:ok, %{status: status_code}} when status_code in 200..299 ->
-          # Emit success telemetry event
-          :telemetry.execute(
-            [:opentelemetry_datadog, :export, :stop],
-            %{duration: duration, status_code: status_code, span_count: count},
-            %{endpoint: endpoint, host: state.host, port: state.port}
+                span_data ->
+                  [span_data | acc]
+              end
+            end,
+            [],
+            tid
           )
 
-        error_response ->
-          handle_export_failure(error_response, formatted, state)
+        count = Enum.count(formatted)
+        headers = build_headers(count, state.container_id)
+
+        response =
+          formatted
+          |> encode_v05()
+          |> push_v05(headers, state)
+
+        stop_metadata = Map.merge(start_metadata, %{span_count: count})
+
+        case response do
+          {:ok, %{status: status_code}} when status_code in 200..299 ->
+            {response, Map.put(stop_metadata, :status_code, status_code)}
+
+          {:ok, %{status: status_code}} ->
+            Logger.error("Trace export failed with HTTP error", response: response)
+
+            error_metadata =
+              Map.merge(stop_metadata, %{
+                error: "HTTP error: #{status_code}",
+                retry: false,
+                status_code: status_code
+              })
+
+            {response, error_metadata}
+
+          {:error, error} ->
+            Logger.error("Trace export failed with request error", error: error)
+
+            error_metadata =
+              Map.merge(stop_metadata, %{
+                error: inspect(error),
+                retry: true
+              })
+
+            {response, error_metadata}
+        end
       end
-    rescue
-      exception ->
-        # Handle exceptions as export failures
-        handle_export_failure({:exception, exception}, formatted, state)
-    end
+    )
 
     :ok
-  end
-
-  def export(:traces, tid, resource, state) do
-    # For non-v05 protocols, we still use the v05 implementation as default
-    export(:traces, tid, resource, Map.put(state, :protocol, :v05))
   end
 
   def export(:metrics, _tid, _resource, _state) do
@@ -157,273 +156,31 @@ defmodule OpentelemetryDatadog.Exporter do
     end
   end
 
-  def push_v05(body, headers, %State{
-        host: host,
-        port: port,
-        timeout_ms: timeout_ms,
-        connect_timeout_ms: connect_timeout_ms
-      }) do
-    Logger.debug(
-      "Datadog export request: #{host}:#{port}/v0.5/traces (timeout: #{timeout_ms}ms, connect_timeout: #{connect_timeout_ms}ms)"
-    )
-
-    Retry.with_retry_attempt(
-      fn attempt ->
-        result =
-          Req.put(
-            "http://#{host}:#{port}/v0.5/traces",
-            body: body,
-            headers: headers,
-            retry: false,
-            receive_timeout: timeout_ms,
-            connect_options: [timeout: connect_timeout_ms]
-          )
-
-        case result do
-          {:error, %Mint.TransportError{reason: :timeout}} ->
-            emit_timeout_telemetry(timeout_ms, attempt)
-            result
-
-          {:error, %Mint.HTTPError{reason: :timeout}} ->
-            emit_timeout_telemetry(timeout_ms, attempt)
-            result
-
-          {:error, :timeout} ->
-            emit_timeout_telemetry(timeout_ms, attempt)
-            result
-
-          {:error, %Mint.TransportError{reason: :connect_timeout}} ->
-            emit_connect_timeout_telemetry(connect_timeout_ms, attempt)
-            result
-
-          {:error, %Mint.HTTPError{reason: :connect_timeout}} ->
-            emit_connect_timeout_telemetry(connect_timeout_ms, attempt)
-            result
-
-          _ ->
-            result
-        end
-      end,
-      host: host,
-      port: port
-    )
-  end
-
-  defp emit_timeout_telemetry(timeout_ms, attempt) do
-    :telemetry.execute(
-      [:opentelemetry_datadog, :export, :timeout],
-      %{count: 1},
-      %{timeout_ms: timeout_ms, attempt: attempt}
-    )
-  end
-
-  defp emit_connect_timeout_telemetry(connect_timeout_ms, attempt) do
-    :telemetry.execute(
-      [:opentelemetry_datadog, :export, :connect_timeout],
-      %{count: 1},
-      %{connect_timeout_ms: connect_timeout_ms, attempt: attempt}
-    )
-  end
-
-  # Handles export failures gracefully by logging appropriate messages and emitting telemetry.
-  # This function categorizes different types of failures and emits specific telemetry events
-  # to help with monitoring and debugging agent connectivity issues.
-  defp handle_export_failure(response, formatted_spans, state) do
-    span_count = length(formatted_spans)
-    trace_ids = extract_trace_ids(formatted_spans)
-    maybe_set_trace_metadata(trace_ids)
-
-    case categorize_failure(response) do
-      {:agent_unavailable, reason} ->
-        log_failure_with_trace_ids(
-          "Datadog agent unavailable: #{reason}. Dropping #{span_count} spans.",
-          trace_ids,
-          state
-        )
-
-        emit_failure_telemetry(:agent_unavailable, reason, span_count, trace_ids, state)
-
-      {:network_error, reason} ->
-        log_failure_with_trace_ids(
-          "Network error exporting to Datadog: #{reason}. Dropping #{span_count} spans.",
-          trace_ids,
-          state
-        )
-
-        emit_failure_telemetry(:network_error, reason, span_count, trace_ids, state)
-
-      {:http_error, status, reason} ->
-        log_failure_with_trace_ids(
-          "HTTP error #{status} exporting to Datadog: #{reason}. Dropping #{span_count} spans.",
-          trace_ids,
-          state
-        )
-
-        emit_failure_telemetry(:http_error, "#{status}: #{reason}", span_count, trace_ids, state)
-
-      {:unknown_error, reason} ->
-        log_failure_with_trace_ids(
-          "Unknown error exporting to Datadog: #{reason}. Dropping #{span_count} spans.",
-          trace_ids,
-          state
-        )
-
-        emit_failure_telemetry(:unknown_error, reason, span_count, trace_ids, state)
-    end
-  end
-
-  defp log_failure_with_trace_ids(message, trace_ids, state) do
-    destination = if state, do: " destination=#{state.host}:#{state.port}", else: ""
-
-    case trace_ids do
-      [] ->
-        Logger.warning("#{message}#{destination}")
-
-      [single_trace_id] ->
-        Logger.warning("#{message}#{destination} [trace_id: #{single_trace_id}]")
-
-      multiple_trace_ids when length(multiple_trace_ids) <= 5 ->
-        trace_ids_str = Enum.join(multiple_trace_ids, ", ")
-        Logger.warning("#{message}#{destination} [trace_ids: #{trace_ids_str}]")
-
-      multiple_trace_ids ->
-        first_few = Enum.take(multiple_trace_ids, 3)
-        remaining_count = length(multiple_trace_ids) - 3
-        trace_ids_str = Enum.join(first_few, ", ")
-
-        Logger.warning(
-          "#{message}#{destination} [trace_ids: #{trace_ids_str} and #{remaining_count} more]"
-        )
-    end
-  end
-
-  defp maybe_set_trace_metadata(trace_ids) do
-    case trace_ids do
-      [first_trace_id | _] -> Logger.metadata(trace_id: first_trace_id)
-      [] -> :ok
-    end
-  end
-
-  # Categorizes different types of export failures for appropriate handling.
-  defp categorize_failure(response) do
-    case response do
-      # Exception handling
-      {:exception, exception} ->
-        {:unknown_error, "Exception: #{Exception.message(exception)}"}
-
-      # Connection refused - agent is down
-      {:error, %Mint.TransportError{reason: :econnrefused}} ->
-        {:agent_unavailable, "connection refused"}
-
-      {:error, :econnrefused} ->
-        {:agent_unavailable, "connection refused"}
-
-      # Connection reset by peer - agent closed connection
-      {:error, %Mint.TransportError{reason: :econnreset}} ->
-        {:agent_unavailable, "connection reset by peer"}
-
-      {:error, :econnreset} ->
-        {:agent_unavailable, "connection reset by peer"}
-
-      # Connection closed - agent closed connection abruptly
-      {:error, %Mint.TransportError{reason: :closed}} ->
-        {:agent_unavailable, "connection closed by agent"}
-
-      {:error, :closed} ->
-        {:agent_unavailable, "connection closed by agent"}
-
-      # Host/network unreachable - agent or network issues
-      {:error, %Mint.TransportError{reason: :ehostunreach}} ->
-        {:agent_unavailable, "host unreachable"}
-
-      {:error, :ehostunreach} ->
-        {:agent_unavailable, "host unreachable"}
-
-      {:error, %Mint.TransportError{reason: :enetunreach}} ->
-        {:network_error, "network unreachable"}
-
-      {:error, :enetunreach} ->
-        {:network_error, "network unreachable"}
-
-      # Network is down
-      {:error, %Mint.TransportError{reason: :enetdown}} ->
-        {:network_error, "network is down"}
-
-      {:error, :enetdown} ->
-        {:network_error, "network is down"}
-
-      # DNS resolution failures
-      {:error, %Mint.TransportError{reason: :nxdomain}} ->
-        {:network_error, "DNS resolution failed"}
-
-      {:error, :nxdomain} ->
-        {:network_error, "DNS resolution failed"}
-
-      # Timeout errors
-      {:error, %Mint.TransportError{reason: :timeout}} ->
-        {:network_error, "connection timeout"}
-
-      {:error, %Mint.HTTPError{reason: :timeout}} ->
-        {:network_error, "HTTP timeout"}
-
-      {:error, :timeout} ->
-        {:network_error, "timeout"}
-
-      # HTTP status errors
-      {:ok, %{status: status} = resp} when status >= 400 ->
-        body = Map.get(resp, :body, "")
-        reason = if is_binary(body) and String.length(body) > 0, do: body, else: "HTTP #{status}"
-        {:http_error, status, reason}
-
-      # Other errors
-      {:error, reason} when is_atom(reason) ->
-        {:unknown_error, Atom.to_string(reason)}
-
-      {:error, reason} when is_binary(reason) ->
-        {:unknown_error, reason}
-
-      {:error, %{__struct__: struct} = error} ->
-        {:unknown_error, "#{struct}: #{inspect(error)}"}
-
-      other ->
-        {:unknown_error, inspect(other)}
-    end
-  end
-
-  defp emit_failure_telemetry(failure_type, reason, span_count, trace_ids, state) do
-    :telemetry.execute(
-      [:opentelemetry_datadog, :export, :failure],
-      %{span_count: span_count, trace_count: length(trace_ids)},
-      %{
-        reason: reason,
-        failure_type: failure_type,
-        trace_ids: trace_ids,
-        host: state.host,
-        port: state.port
-      }
-    )
-  end
-
-  defp extract_trace_ids(formatted_spans) do
-    formatted_spans
-    |> List.flatten()
-    |> Enum.map(fn span_data ->
-      case span_data do
-        %{trace_id: trace_id} -> trace_id
-        span when is_map(span) -> Map.get(span, :trace_id)
-        _ -> nil
+  def push_v05(body, headers, %State{host: host, port: port}) do
+    url =
+      if String.starts_with?(host, ["http://", "https://"]) do
+        "#{host}:#{port}/v0.5/traces"
+      else
+        # Default to http for backward compatibility with local agent
+        "http://#{host}:#{port}/v0.5/traces"
       end
-    end)
-    |> Enum.reject(&is_nil/1)
-    |> Enum.uniq()
+
+    Req.put(
+      url,
+      body: body,
+      headers: headers,
+      retry: :transient,
+      retry_delay: &retry_delay/1,
+      retry_log_level: false
+    )
   end
 
   def format_span_v05(span_record, data, state) do
-    processing_state = Exporter.build_processing_state(span_record, data)
+    processing_state = Formatter.build_processing_state(span_record, data)
 
-    dd_span = Exporter.format_span_base(span_record, data, state)
+    dd_span = Formatter.format_span_base(span_record, data, state)
 
-    dd_span_kind = Atom.to_string(Keyword.fetch!(span(span_record), :kind))
+    dd_span_kind = Atom.to_string(Keyword.fetch!(Formatter.get_span(span_record), :kind))
 
     dd_span = %{
       dd_span
@@ -434,7 +191,7 @@ defmodule OpentelemetryDatadog.Exporter do
         error: 0
     }
 
-    span = apply_mappers(dd_span, span(span_record), processing_state)
+    span = apply_mappers(dd_span, Formatter.get_span(span_record), processing_state)
 
     case span do
       nil ->
@@ -460,13 +217,37 @@ defmodule OpentelemetryDatadog.Exporter do
     end
   end
 
-  def format_span_with_processor(span_record, data, state) do
-    processor = %SpanProcessor.V05{}
-    processing_state = Map.put(state, :mappers, @mappers)
-    SpanProcessor.process_span(processor, span_record, data, processing_state)
+  def apply_mappers(span, otel_span, state) do
+    Formatter.apply_mappers(@mappers, span, otel_span, state)
   end
 
-  def apply_mappers(span, otel_span, state) do
-    Exporter.apply_mappers(@mappers, span, otel_span, state)
+  @doc """
+  Builds common headers for Datadog trace requests.
+  """
+  @spec build_headers(non_neg_integer(), String.t() | nil) :: [{String.t(), String.t()}]
+  def build_headers(trace_count, container_id \\ nil) do
+    base_headers = [
+      {"Content-Type", "application/msgpack"},
+      {"Datadog-Meta-Lang", "elixir"},
+      {"Datadog-Meta-Lang-Version", System.version()},
+      {"Datadog-Meta-Tracer-Version", Application.spec(:opentelemetry_datadog)[:vsn]},
+      {"X-Datadog-Trace-Count", trace_count}
+    ]
+
+    container_headers =
+      if container_id, do: [{"Datadog-Container-ID", container_id}], else: []
+
+    base_headers ++ container_headers
+  end
+
+  @doc """
+  Calculates retry delay with exponential backoff and jitter.
+
+  Uses 3 retries with 10% jitter.
+  Example delays: 484ms, 945ms, 1908ms
+  """
+  @spec retry_delay(non_neg_integer()) :: non_neg_integer()
+  def retry_delay(attempt) do
+    trunc(Integer.pow(2, attempt) * 500 * (1 - 0.1 * :rand.uniform()))
   end
 end
