@@ -42,7 +42,6 @@ defmodule OpentelemetryDatadog.Exporter do
 
   alias OpentelemetryDatadog.{Mapper, Encoder}
   alias OpentelemetryDatadog.{Utils.Exporter, Utils.Span}
-  alias OpentelemetryDatadog.SpanProcessor
 
   @mappers [
     {Mapper.LiftError, []},
@@ -247,11 +246,7 @@ defmodule OpentelemetryDatadog.Exporter do
     end
   end
 
-  def format_span_with_processor(span_record, data, state) do
-    processor = %SpanProcessor.V05{}
-    processing_state = Map.put(state, :mappers, @mappers)
-    SpanProcessor.process_span(processor, span_record, data, processing_state)
-  end
+
 
   def apply_mappers(span, otel_span, state) do
     Exporter.apply_mappers(@mappers, span, otel_span, state)
