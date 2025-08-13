@@ -40,8 +40,8 @@ defmodule OpentelemetryDatadog.Exporter do
     ]
   end
 
-  alias OpentelemetryDatadog.{Mapper, Encoder}
-  alias OpentelemetryDatadog.{Utils.Exporter, Utils.Span}
+  alias OpentelemetryDatadog.{Mapper, Encoder, Formatter}
+  alias OpentelemetryDatadog.Utils.Span
 
   @mappers [
     {Mapper.LiftError, []},
@@ -64,7 +64,7 @@ defmodule OpentelemetryDatadog.Exporter do
 
   @impl true
   def export(:traces, tid, resource, %{protocol: :v05} = state) do
-    data = Exporter.build_resource_data(resource)
+    data = Formatter.build_resource_data(resource)
 
     formatted =
       :ets.foldl(
@@ -96,7 +96,7 @@ defmodule OpentelemetryDatadog.Exporter do
     )
 
     try do
-      headers = Exporter.build_headers(count, state.container_id)
+      headers = build_headers(count, state.container_id)
 
       response =
         formatted
@@ -199,17 +199,17 @@ defmodule OpentelemetryDatadog.Exporter do
       body: body,
       headers: headers,
       retry: :transient,
-      retry_delay: &Exporter.retry_delay/1,
+      retry_delay: &retry_delay/1,
       retry_log_level: false
     )
   end
 
   def format_span_v05(span_record, data, state) do
-    processing_state = Exporter.build_processing_state(span_record, data)
+    processing_state = Formatter.build_processing_state(span_record, data)
 
-    dd_span = Exporter.format_span_base(span_record, data, state)
+    dd_span = Formatter.format_span_base(span_record, data, state)
 
-    dd_span_kind = Atom.to_string(Keyword.fetch!(span(span_record), :kind))
+    dd_span_kind = Atom.to_string(Keyword.fetch!(Formatter.get_span(span_record), :kind))
 
     dd_span = %{
       dd_span
@@ -220,7 +220,7 @@ defmodule OpentelemetryDatadog.Exporter do
         error: 0
     }
 
-    span = apply_mappers(dd_span, span(span_record), processing_state)
+    span = apply_mappers(dd_span, Formatter.get_span(span_record), processing_state)
 
     case span do
       nil ->
@@ -246,9 +246,37 @@ defmodule OpentelemetryDatadog.Exporter do
     end
   end
 
-
-
   def apply_mappers(span, otel_span, state) do
-    Exporter.apply_mappers(@mappers, span, otel_span, state)
+    Formatter.apply_mappers(@mappers, span, otel_span, state)
+  end
+
+  @doc """
+  Builds common headers for Datadog trace requests.
+  """
+  @spec build_headers(non_neg_integer(), String.t() | nil) :: [{String.t(), String.t()}]
+  def build_headers(trace_count, container_id \\ nil) do
+    base_headers = [
+      {"Content-Type", "application/msgpack"},
+      {"Datadog-Meta-Lang", "elixir"},
+      {"Datadog-Meta-Lang-Version", System.version()},
+      {"Datadog-Meta-Tracer-Version", Application.spec(:opentelemetry_datadog)[:vsn]},
+      {"X-Datadog-Trace-Count", trace_count}
+    ]
+
+    container_headers =
+      if container_id, do: [{"Datadog-Container-ID", container_id}], else: []
+
+    base_headers ++ container_headers
+  end
+
+  @doc """
+  Calculates retry delay with exponential backoff and jitter.
+
+  Uses 3 retries with 10% jitter.
+  Example delays: 484ms, 945ms, 1908ms
+  """
+  @spec retry_delay(non_neg_integer()) :: non_neg_integer()
+  def retry_delay(attempt) do
+    trunc(Integer.pow(2, attempt) * 500 * (1 - 0.1 * :rand.uniform()))
   end
 end

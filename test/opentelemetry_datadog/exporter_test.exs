@@ -283,40 +283,6 @@ defmodule OpentelemetryDatadog.ExporterTest do
     end
   end
 
-  describe "apply_mappers/3" do
-    test "applies mappers in sequence" do
-      span = %OpentelemetryDatadog.DatadogSpan{
-        trace_id: 123,
-        span_id: 456,
-        name: "test"
-      }
-
-      # Mock mappers that just pass through
-      mappers = []
-
-      result = OpentelemetryDatadog.Utils.Exporter.apply_mappers(mappers, span, nil, %{})
-      assert result == span
-    end
-
-    test "returns nil if any mapper returns nil" do
-      span = %OpentelemetryDatadog.DatadogSpan{
-        trace_id: 123,
-        span_id: 456,
-        name: "test"
-      }
-
-      # Create a mock mapper that returns nil
-      defmodule TestMapper do
-        def map(_span, _otel_span, _args, _state), do: nil
-      end
-
-      mappers = [{TestMapper, []}]
-
-      result = OpentelemetryDatadog.Utils.Exporter.apply_mappers(mappers, span, nil, %{})
-      assert result == nil
-    end
-  end
-
   describe "export/4" do
     test "handles metrics export" do
       state = %Exporter.State{protocol: :v05}
