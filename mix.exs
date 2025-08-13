@@ -7,7 +7,14 @@ defmodule OpentelemetryDatadog.MixProject do
       version: "0.1.0",
       elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      aliases: aliases(),
+      description: "Datadog trace exporter for OpenTelemetry in Elixir",
+      source_url: "https://github.com/surgeventures/opentelemetry_datadog",
+      package: [
+        licenses: ["MIT"],
+        links: %{"GitHub" => "https://github.com/surgeventures/opentelemetry_datadog"}
+      ]
     ]
   end
 
@@ -24,6 +31,14 @@ defmodule OpentelemetryDatadog.MixProject do
       {:opentelemetry, "~> 1.4", runtime: false},
       {:msgpax, "~> 2.4"},
       {:req, "~> 0.4.14"}
+    ]
+  end
+
+  defp aliases do
+    [
+      "test.unit": ["test --only unit"],
+      "test.integration": ["test --only integration"],
+      "test.all": ["test"]
     ]
   end
 end
