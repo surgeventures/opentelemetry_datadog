@@ -63,7 +63,7 @@ defmodule OpentelemetryDatadog.Exporter do
   end
 
   @impl true
-  def export(:traces, tid, resource, %{protocol: :v05} = state) do
+  def export(:traces, tid, resource, state) do
     endpoint = "/v0.5/traces"
     start_metadata = %{endpoint: endpoint, host: state.host, port: state.port}
 
@@ -130,11 +130,6 @@ defmodule OpentelemetryDatadog.Exporter do
     )
 
     :ok
-  end
-
-  def export(:traces, tid, resource, state) do
-    # For non-v05 protocols, we still use the v05 implementation as default
-    export(:traces, tid, resource, Map.put(state, :protocol, :v05))
   end
 
   def export(:metrics, _tid, _resource, _state) do
