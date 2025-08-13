@@ -347,50 +347,8 @@ defmodule OpentelemetryDatadog.ConfigTest do
 
   # V0.5 Exporter Configuration Tests
 
-  describe "to_exporter_config_with_protocol/1" do
-    test "adds v05 protocol to keyword list config" do
-      config = [host: "localhost", port: 8126, service: "my-service"]
-
-      result = Config.to_exporter_config_with_protocol(config)
-
-      assert result[:protocol] == :v05
-      assert result[:host] == "localhost"
-      assert result[:port] == 8126
-      assert result[:service] == "my-service"
-    end
-
-    test "converts map config to keyword list with v05 protocol" do
-      config = %{host: "localhost", port: 8126, service: "my-service"}
-
-      result = Config.to_exporter_config_with_protocol(config)
-
-      assert result[:protocol] == :v05
-      assert result[:host] == "localhost"
-      assert result[:port] == 8126
-      assert result[:service] == "my-service"
-    end
-
-    test "overwrites existing protocol setting" do
-      config = [host: "localhost", port: 8126, protocol: :v04]
-
-      result = Config.to_exporter_config_with_protocol(config)
-
-      assert result[:protocol] == :v05
-    end
-  end
-
   describe "setup/1" do
-    test "validates configuration and accepts v05 protocol" do
-      config = [
-        host: "localhost",
-        port: 8126,
-        protocol: :v05
-      ]
-
-      assert Config.setup(config) == :ok
-    end
-
-    test "defaults to v05 protocol when not specified" do
+    test "validates and accepts valid configuration" do
       config = [
         host: "localhost",
         port: 8126
@@ -399,21 +357,9 @@ defmodule OpentelemetryDatadog.ConfigTest do
       assert Config.setup(config) == :ok
     end
 
-    test "rejects non-v05 protocols" do
-      config = [
-        host: "localhost",
-        port: 8126,
-        protocol: :v04
-      ]
-
-      assert {:error, :invalid_config, message} = Config.setup(config)
-      assert message =~ "exporter requires protocol: :v05"
-    end
-
     test "validates required configuration" do
       config = [
-        port: 8126,
-        protocol: :v05
+        port: 8126
       ]
 
       assert {:error, :missing_required_config, _} = Config.setup(config)
@@ -469,11 +415,10 @@ defmodule OpentelemetryDatadog.ConfigTest do
   end
 
   describe "get_config/0" do
-    test "returns configuration with v05 protocol" do
+    test "returns configuration" do
       put_env(%{"DD_AGENT_HOST" => "test-host"})
 
       assert {:ok, config} = Config.get_config()
-      assert config[:protocol] == :v05
       assert config[:host] == "test-host"
     end
 
@@ -483,11 +428,10 @@ defmodule OpentelemetryDatadog.ConfigTest do
   end
 
   describe "get_config!/0" do
-    test "returns configuration with v05 protocol" do
+    test "returns configuration" do
       put_env(%{"DD_AGENT_HOST" => "test-host"})
 
       config = Config.get_config!()
-      assert config[:protocol] == :v05
       assert config[:host] == "test-host"
     end
 

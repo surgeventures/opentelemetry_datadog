@@ -173,8 +173,7 @@ defmodule OpentelemetryDatadog.TelemetryTest do
     test "exporter initialization works correctly" do
       config = [
         host: "http://localhost",
-        port: 8126,
-        protocol: :v05
+        port: 8126
       ]
 
       {:ok, state} = Exporter.init(config)
@@ -182,11 +181,10 @@ defmodule OpentelemetryDatadog.TelemetryTest do
       assert %Exporter.State{} = state
       assert state.host == "http://localhost"
       assert state.port == 8126
-      assert state.protocol == :v05
     end
 
     test "exporter handles metrics export without telemetry" do
-      state = %Exporter.State{protocol: :v05}
+      state = %Exporter.State{host: "localhost", port: 8126}
 
       {result, events} =
         capture_telemetry_events(@telemetry_events, fn ->

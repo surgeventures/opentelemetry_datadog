@@ -143,7 +143,6 @@ defmodule OpentelemetryDatadog.IntegrationTest do
       minimal_config()
 
       assert {:ok, config} = OpentelemetryDatadog.Config.get_config()
-      assert config[:protocol] == :v05
       assert config[:host] == "localhost"
       assert config[:port] == OpentelemetryDatadog.DatadogConstants.default(:port)
     end
@@ -151,12 +150,10 @@ defmodule OpentelemetryDatadog.IntegrationTest do
     test "can initialize exporter" do
       config = [
         host: "localhost",
-        port: 8126,
-        protocol: :v05
+        port: 8126
       ]
 
       assert {:ok, state} = OpentelemetryDatadog.Exporter.init(config)
-      assert state.protocol == :v05
       assert state.host == "localhost"
       assert state.port == 8126
     end
@@ -204,10 +201,8 @@ defmodule OpentelemetryDatadog.IntegrationTest do
       assert OpentelemetryDatadog.Config.validate(config_map) == :ok
 
       # config should work correctly
-      exporter_config =
-        OpentelemetryDatadog.Config.to_exporter_config_with_protocol(standard_config)
+      exporter_config = OpentelemetryDatadog.Config.to_exporter_config(config_map)
 
-      assert exporter_config[:protocol] == :v05
       assert exporter_config[:host] == "localhost"
       assert exporter_config[:port] == 8126
     end
@@ -219,7 +214,7 @@ defmodule OpentelemetryDatadog.IntegrationTest do
 
       # 2. Initialize exporter
       assert {:ok, exporter_state} = OpentelemetryDatadog.Exporter.init(config)
-      assert exporter_state.protocol == :v05
+      assert exporter_state.host == "localhost"
 
       # 3. Create sample span data
       span_data = %{
@@ -264,33 +259,30 @@ defmodule OpentelemetryDatadog.IntegrationTest do
       prod_config("api-service", "v1.2.3")
 
       assert {:ok, config} = OpentelemetryDatadog.Config.get_config()
-      assert config[:protocol] == :v05
       assert config[:host] == "datadog-agent.kube-system.svc.cluster.local"
 
       assert {:ok, exporter_state} = OpentelemetryDatadog.Exporter.init(config)
-      assert exporter_state.protocol == :v05
+      assert exporter_state.host == "datadog-agent.kube-system.svc.cluster.local"
     end
 
     test "works with containerized configuration" do
       containerized_config("container-service", "v2.0.0", "staging")
 
       assert {:ok, config} = OpentelemetryDatadog.Config.get_config()
-      assert config[:protocol] == :v05
       assert config[:host] == "dd-agent"
 
       assert {:ok, exporter_state} = OpentelemetryDatadog.Exporter.init(config)
-      assert exporter_state.protocol == :v05
+      assert exporter_state.host == "dd-agent"
     end
 
     test "works with Phoenix configuration" do
       phoenix_config("phoenix-web-app")
 
       assert {:ok, config} = OpentelemetryDatadog.Config.get_config()
-      assert config[:protocol] == :v05
       assert config[:host] == "localhost"
 
       assert {:ok, exporter_state} = OpentelemetryDatadog.Exporter.init(config)
-      assert exporter_state.protocol == :v05
+      assert exporter_state.host == "localhost"
     end
 
     test "handles error scenarios gracefully" do
@@ -304,7 +296,6 @@ defmodule OpentelemetryDatadog.IntegrationTest do
       ci_config("ci-test-service")
 
       assert {:ok, config} = OpentelemetryDatadog.Config.get_config()
-      assert config[:protocol] == :v05
       assert config[:host] == "localhost"
 
       # CI config should have full sampling

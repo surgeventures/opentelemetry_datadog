@@ -5,37 +5,34 @@ defmodule OpentelemetryDatadog.ExporterTest do
   alias OpentelemetryDatadog.Exporter
 
   describe "init/1" do
-    test "initializes with v05 protocol" do
-      config = [
-        host: "localhost",
-        port: 8126,
-        protocol: :v05
-      ]
-
-      assert {:ok, state} = Exporter.init(config)
-      assert state.host == "localhost"
-      assert state.port == 8126
-      assert state.protocol == :v05
-    end
-
-    test "defaults to v05 protocol when not specified" do
+    test "initializes with required configuration" do
       config = [
         host: "localhost",
         port: 8126
       ]
 
       assert {:ok, state} = Exporter.init(config)
-      assert state.protocol == :v05
+      assert state.host == "localhost"
+      assert state.port == 8126
+    end
+
+    test "initializes with basic configuration" do
+      config = [
+        host: "localhost",
+        port: 8126
+      ]
+
+      assert {:ok, state} = Exporter.init(config)
+      assert state.host == "localhost"
+      assert state.port == 8126
     end
 
     test "initializes with production configuration" do
       prod_config("api-service", "v2.1.0")
       {:ok, config} = OpentelemetryDatadog.Config.load()
       exporter_config = OpentelemetryDatadog.Config.to_exporter_config(config)
-      v05_config = OpentelemetryDatadog.Config.to_exporter_config_with_protocol(exporter_config)
 
-      assert {:ok, state} = Exporter.init(v05_config)
-      assert state.protocol == :v05
+      assert {:ok, state} = Exporter.init(exporter_config)
       assert state.host == "datadog-agent.kube-system.svc.cluster.local"
       assert state.port == 8126
     end
@@ -44,10 +41,8 @@ defmodule OpentelemetryDatadog.ExporterTest do
       dev_config("test-service")
       {:ok, config} = OpentelemetryDatadog.Config.load()
       exporter_config = OpentelemetryDatadog.Config.to_exporter_config(config)
-      v05_config = OpentelemetryDatadog.Config.to_exporter_config_with_protocol(exporter_config)
 
-      assert {:ok, state} = Exporter.init(v05_config)
-      assert state.protocol == :v05
+      assert {:ok, state} = Exporter.init(exporter_config)
       assert state.host == "localhost"
     end
 
@@ -94,11 +89,11 @@ defmodule OpentelemetryDatadog.ExporterTest do
 
     test "exporter module has required functions" do
       # Test that the module compiles and basic functions work
-      config = [host: "localhost", port: 8126, protocol: :v05]
+      config = [host: "localhost", port: 8126]
 
       # Test init function
       assert {:ok, state} = Exporter.init(config)
-      assert state.protocol == :v05
+      assert state.host == "localhost"
 
       # Test shutdown function
       assert Exporter.shutdown(state) == :ok
