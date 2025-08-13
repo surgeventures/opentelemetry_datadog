@@ -64,106 +64,70 @@ defmodule OpentelemetryDatadog.Exporter do
 
   @impl true
   def export(:traces, tid, resource, %{protocol: :v05} = state) do
-    data = Formatter.build_resource_data(resource)
-
-    formatted =
-      :ets.foldl(
-        fn span, acc ->
-          case format_span_v05(span, data, state) do
-            [] ->
-              Logger.warning("Span skipped: #{inspect(span)}")
-              acc
-
-            span_data ->
-              [span_data | acc]
-          end
-        end,
-        [],
-        tid
-      )
-
-    count = Enum.count(formatted)
-
-    # Emit telemetry start event
-    start_time = System.monotonic_time()
-    system_time = System.system_time()
     endpoint = "/v0.5/traces"
+    start_metadata = %{endpoint: endpoint, host: state.host, port: state.port}
 
-    :telemetry.execute(
-      [:opentelemetry_datadog, :export, :start],
-      %{system_time: system_time, span_count: count},
-      %{endpoint: endpoint, host: state.host, port: state.port}
-    )
+    :telemetry.span(
+      [:opentelemetry_datadog, :export],
+      start_metadata,
+      fn ->
+        data = Formatter.build_resource_data(resource)
 
-    try do
-      headers = build_headers(count, state.container_id)
+        formatted =
+          :ets.foldl(
+            fn span, acc ->
+              case format_span_v05(span, data, state) do
+                [] ->
+                  Logger.warning("Span skipped: #{inspect(span)}")
+                  acc
 
-      response =
-        formatted
-        |> encode_v05()
-        |> push_v05(headers, state)
-
-      duration = System.monotonic_time() - start_time
-
-      case response do
-        {:ok, %{status: status_code}} when status_code in 200..299 ->
-          # Emit success telemetry event
-          :telemetry.execute(
-            [:opentelemetry_datadog, :export, :stop],
-            %{duration: duration, status_code: status_code, span_count: count},
-            %{endpoint: endpoint, host: state.host, port: state.port}
+                span_data ->
+                  [span_data | acc]
+              end
+            end,
+            [],
+            tid
           )
 
-        {:ok, %{status: status_code}} ->
-          # Emit error telemetry event for HTTP errors
-          :telemetry.execute(
-            [:opentelemetry_datadog, :export, :error],
-            %{span_count: count},
-            %{
-              error: "HTTP error: #{status_code}",
-              endpoint: endpoint,
-              host: state.host,
-              port: state.port,
-              retry: false
-            }
-          )
+        count = Enum.count(formatted)
+        headers = build_headers(count, state.container_id)
 
-          Logger.error("Trace export failed with HTTP error", response: response)
+        response =
+          formatted
+          |> encode_v05()
+          |> push_v05(headers, state)
 
-        {:error, error} ->
-          # Emit error telemetry event for request errors
-          :telemetry.execute(
-            [:opentelemetry_datadog, :export, :error],
-            %{span_count: count},
-            %{
-              error: inspect(error),
-              endpoint: endpoint,
-              host: state.host,
-              port: state.port,
-              retry: true
-            }
-          )
+        stop_metadata = Map.merge(start_metadata, %{span_count: count})
 
-          Logger.error("Trace export failed with request error", error: error)
+        case response do
+          {:ok, %{status: status_code}} when status_code in 200..299 ->
+            {response, Map.put(stop_metadata, :status_code, status_code)}
+
+          {:ok, %{status: status_code}} ->
+            Logger.error("Trace export failed with HTTP error", response: response)
+
+            error_metadata =
+              Map.merge(stop_metadata, %{
+                error: "HTTP error: #{status_code}",
+                retry: false,
+                status_code: status_code
+              })
+
+            {response, error_metadata}
+
+          {:error, error} ->
+            Logger.error("Trace export failed with request error", error: error)
+
+            error_metadata =
+              Map.merge(stop_metadata, %{
+                error: inspect(error),
+                retry: true
+              })
+
+            {response, error_metadata}
+        end
       end
-    rescue
-      exception ->
-        # Emit exception telemetry event
-        :telemetry.execute(
-          [:opentelemetry_datadog, :export, :exception],
-          %{span_count: count},
-          %{
-            kind: exception.__struct__,
-            reason: Exception.message(exception),
-            stacktrace: __STACKTRACE__,
-            endpoint: endpoint,
-            host: state.host,
-            port: state.port
-          }
-        )
-
-        reraise exception, __STACKTRACE__
-    end
+    )
 
     :ok
   end
