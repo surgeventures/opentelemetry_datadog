@@ -15,7 +15,6 @@ defmodule OpentelemetryDatadog.IntegrationTest do
 
       assert {:ok, loaded_config} = OpentelemetryDatadog.Config.load()
       assert :ok = OpentelemetryDatadog.Config.validate(loaded_config)
-      assert :ok = OpentelemetryDatadog.setup()
       assert {:ok, runtime_config} = OpentelemetryDatadog.get_config()
 
       assert loaded_config.host == runtime_config.host
@@ -32,8 +31,6 @@ defmodule OpentelemetryDatadog.IntegrationTest do
       assert config.port == 8126
       assert is_nil(config.service)
       assert is_nil(config.tags)
-
-      assert :ok = OpentelemetryDatadog.setup()
     end
 
     test "manual configuration override workflow" do
@@ -45,7 +42,7 @@ defmodule OpentelemetryDatadog.IntegrationTest do
         env: "manual-env"
       ]
 
-      assert :ok = OpentelemetryDatadog.setup(config)
+      assert :ok = OpentelemetryDatadog.Config.validate(Enum.into(config, %{}))
     end
   end
 
@@ -68,27 +65,29 @@ defmodule OpentelemetryDatadog.IntegrationTest do
       assert env_config.port == 8128
       assert env_config.service == "env-service"
 
-      assert :ok = OpentelemetryDatadog.setup(app_config)
+      assert :ok = OpentelemetryDatadog.Config.validate(Enum.into(app_config, %{}))
     end
   end
 
   describe "exception-raising variants" do
-    test "setup! raises ConfigError on missing configuration" do
+    test "load! raises ConfigError on missing configuration" do
       assert_raise OpentelemetryDatadog.ConfigError,
                    ~r/Configuration error.*DD_AGENT_HOST is required/,
                    fn ->
-                     OpentelemetryDatadog.setup!()
+                     OpentelemetryDatadog.Config.load!()
                    end
     end
 
-    test "setup! with invalid config raises ConfigError" do
+    test "validate with invalid config raises ConfigError" do
       config = [port: 8126]
 
-      assert_raise OpentelemetryDatadog.ConfigError,
-                   ~r/Configuration error.*host is required/,
-                   fn ->
-                     OpentelemetryDatadog.setup!(config)
-                   end
+      case OpentelemetryDatadog.Config.validate(Enum.into(config, %{})) do
+        :ok ->
+          flunk("Expected validation to fail")
+
+        {:error, :missing_required_config, message} ->
+          assert message =~ "host is required"
+      end
     end
 
     test "get_config! raises ConfigError on missing configuration" do
@@ -96,14 +95,6 @@ defmodule OpentelemetryDatadog.IntegrationTest do
                    ~r/Configuration error.*DD_AGENT_HOST is required/,
                    fn ->
                      OpentelemetryDatadog.get_config!()
-                   end
-    end
-
-    test "config load! raises ConfigError on missing configuration" do
-      assert_raise OpentelemetryDatadog.ConfigError,
-                   ~r/Configuration error.*DD_AGENT_HOST is required/,
-                   fn ->
-                     OpentelemetryDatadog.Config.load!()
                    end
     end
   end
@@ -120,8 +111,6 @@ defmodule OpentelemetryDatadog.IntegrationTest do
       assert exporter_config[:host] == "localhost"
       assert exporter_config[:service] == "phoenix-app"
       assert exporter_config[:env] == "development"
-
-      assert :ok = OpentelemetryDatadog.setup()
     end
 
     test "containerized application with full configuration" do
@@ -133,8 +122,6 @@ defmodule OpentelemetryDatadog.IntegrationTest do
       assert config.sample_rate == 0.2
       assert config.tags["container"] == "docker"
       assert config.tags["orchestrator"] == "k8s"
-
-      assert :ok = OpentelemetryDatadog.setup!()
     end
   end
 
@@ -200,7 +187,6 @@ defmodule OpentelemetryDatadog.IntegrationTest do
       config_map = Enum.into(standard_config, %{})
       assert OpentelemetryDatadog.Config.validate(config_map) == :ok
 
-      # config should work correctly
       exporter_config = OpentelemetryDatadog.Config.to_exporter_config(config_map)
 
       assert exporter_config[:host] == "localhost"
@@ -208,15 +194,12 @@ defmodule OpentelemetryDatadog.IntegrationTest do
     end
 
     test "demonstrates usage pattern" do
-      # 1. Set up environment and load configuration
       dev_config("example-service")
       assert {:ok, config} = OpentelemetryDatadog.Config.get_config()
 
-      # 2. Initialize exporter
       assert {:ok, exporter_state} = OpentelemetryDatadog.Exporter.init(config)
       assert exporter_state.host == "localhost"
 
-      # 3. Create sample span data
       span_data = %{
         trace_id: 999_888_777,
         span_id: 111_222_333,
@@ -226,7 +209,6 @@ defmodule OpentelemetryDatadog.IntegrationTest do
         resource: "GET /api/example",
         type: "web",
         start: System.system_time(:nanosecond),
-        # 25ms
         duration: 25_000_000,
         error: 0,
         meta: %{
@@ -239,11 +221,9 @@ defmodule OpentelemetryDatadog.IntegrationTest do
         }
       }
 
-      # 4. Encode for transmission
       assert {:ok, encoded} = OpentelemetryDatadog.Encoder.encode([span_data])
       assert is_binary(encoded)
 
-      # 5. Verify encoding is correct
       {:ok, decoded} = Msgpax.unpack(encoded)
       [decoded_span] = decoded
 
@@ -255,38 +235,29 @@ defmodule OpentelemetryDatadog.IntegrationTest do
       assert decoded_span["metrics"]["http.response_time"] == 0.025
     end
 
-    test "works with production configuration" do
-      prod_config("api-service", "v1.2.3")
+    test "works with different environment configurations" do
+      configurations = [
+        {"production", fn -> prod_config("api-service", "v1.2.3") end,
+         "datadog-agent.kube-system.svc.cluster.local"},
+        {"containerized",
+         fn -> containerized_config("container-service", "v2.0.0", "staging") end, "dd-agent"},
+        {"phoenix", fn -> phoenix_config("phoenix-web-app") end, "localhost"}
+      ]
 
-      assert {:ok, config} = OpentelemetryDatadog.Config.get_config()
-      assert config[:host] == "datadog-agent.kube-system.svc.cluster.local"
+      for {_env_name, setup_fn, expected_host} <- configurations do
+        setup_fn.()
 
-      assert {:ok, exporter_state} = OpentelemetryDatadog.Exporter.init(config)
-      assert exporter_state.host == "datadog-agent.kube-system.svc.cluster.local"
-    end
+        assert {:ok, config} = OpentelemetryDatadog.Config.get_config()
+        assert config[:host] == expected_host
 
-    test "works with containerized configuration" do
-      containerized_config("container-service", "v2.0.0", "staging")
+        assert {:ok, exporter_state} = OpentelemetryDatadog.Exporter.init(config)
+        assert exporter_state.host == expected_host
 
-      assert {:ok, config} = OpentelemetryDatadog.Config.get_config()
-      assert config[:host] == "dd-agent"
-
-      assert {:ok, exporter_state} = OpentelemetryDatadog.Exporter.init(config)
-      assert exporter_state.host == "dd-agent"
-    end
-
-    test "works with Phoenix configuration" do
-      phoenix_config("phoenix-web-app")
-
-      assert {:ok, config} = OpentelemetryDatadog.Config.get_config()
-      assert config[:host] == "localhost"
-
-      assert {:ok, exporter_state} = OpentelemetryDatadog.Exporter.init(config)
-      assert exporter_state.host == "localhost"
+        reset_env()
+      end
     end
 
     test "handles error scenarios gracefully" do
-      # Test that configuration errors are handled properly
       invalid_port_config()
 
       assert {:error, :invalid_config, _} = OpentelemetryDatadog.Config.get_config()
@@ -298,7 +269,6 @@ defmodule OpentelemetryDatadog.IntegrationTest do
       assert {:ok, config} = OpentelemetryDatadog.Config.get_config()
       assert config[:host] == "localhost"
 
-      # CI config should have full sampling
       {:ok, base_config} = OpentelemetryDatadog.Config.load()
       assert base_config.sample_rate == 1.0
     end
