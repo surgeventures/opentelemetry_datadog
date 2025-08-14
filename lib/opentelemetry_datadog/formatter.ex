@@ -1,9 +1,9 @@
-defmodule OpentelemetryDatadog.Utils.Exporter do
+defmodule OpentelemetryDatadog.Formatter do
   @moduledoc """
-  Utilities for the OpenTelemetry Datadog exporter.
+  Formats OpenTelemetry spans into Datadog span data structures.
 
-  Contains common functionality used by the Datadog exporter
-  for span processing, HTTP handling, and data transformation.
+  Takes OpenTelemetry spans and converts them into DatadogSpan structures
+  that can be encoded and sent to the Datadog Agent API.
   """
 
   require Record
@@ -31,37 +31,10 @@ defmodule OpentelemetryDatadog.Utils.Exporter do
   @type span_record :: tuple()
 
   @doc """
-  Accessor function for span record.
-  """
-  @spec get_span(span_record()) :: otel_span()
-  def get_span(span_record), do: span(span_record)
-
-  @doc """
-  Applies a list of mappers to transform a DatadogSpan.
-
-  Each mapper can either return {:next, updated_span} to continue processing
-  or nil to filter out the span entirely.
-  """
-  @spec apply_mappers([mapper_config()], DatadogSpan.t(), otel_span(), map()) ::
-          DatadogSpan.t() | nil
-  def apply_mappers(mappers, span, otel_span, state) do
-    apply_mappers_recursive(mappers, span, otel_span, state)
-  end
-
-  defp apply_mappers_recursive([{mapper, mapper_arg} | rest], span, otel_span, state) do
-    case mapper.map(span, otel_span, mapper_arg, state) do
-      {:next, span} -> apply_mappers_recursive(rest, span, otel_span, state)
-      nil -> nil
-    end
-  end
-
-  defp apply_mappers_recursive([], span, _, _), do: span
-
-  @doc """
   Formats an OpenTelemetry span into a DatadogSpan structure.
 
-  This is the base formatting logic used by the exporter.
-  Version-specific formatting should be handled by the caller.
+  This is the base formatting logic that converts OpenTelemetry spans
+  into the internal DatadogSpan representation.
   """
   @spec format_span_base(span_record(), span_data(), map()) :: DatadogSpan.t()
   def format_span_base(span_record, _data, _state) do
@@ -94,6 +67,27 @@ defmodule OpentelemetryDatadog.Utils.Exporter do
   end
 
   @doc """
+  Applies a list of mappers to transform a DatadogSpan.
+
+  Each mapper can either return {:next, updated_span} to continue processing
+  or nil to filter out the span entirely.
+  """
+  @spec apply_mappers([mapper_config()], DatadogSpan.t(), otel_span(), map()) ::
+          DatadogSpan.t() | nil
+  def apply_mappers(mappers, span, otel_span, state) do
+    apply_mappers_recursive(mappers, span, otel_span, state)
+  end
+
+  defp apply_mappers_recursive([{mapper, mapper_arg} | rest], span, otel_span, state) do
+    case mapper.map(span, otel_span, mapper_arg, state) do
+      {:next, span} -> apply_mappers_recursive(rest, span, otel_span, state)
+      nil -> nil
+    end
+  end
+
+  defp apply_mappers_recursive([], span, _, _), do: span
+
+  @doc """
   Builds the processing state for span formatting.
 
   Combines OpenTelemetry events with resource data.
@@ -106,77 +100,6 @@ defmodule OpentelemetryDatadog.Utils.Exporter do
       events: :otel_events.list(Keyword.fetch!(span, :events))
     }
     |> Map.merge(data)
-  end
-
-  @doc """
-  Calculates retry delay with exponential backoff and equal jitter.
-
-  Uses fixed base delays: 100ms, 200ms, 400ms with equal jitter.
-  This function is kept for backward compatibility with Req's retry mechanism.
-  For new implementations, use OpentelemetryDatadog.Core.Retry.retry_delay/1.
-  """
-  @spec retry_delay(non_neg_integer()) :: non_neg_integer()
-  def retry_delay(attempt) do
-    OpentelemetryDatadog.Core.Retry.retry_delay(attempt)
-  end
-
-  @doc """
-  Recursively removes nil values from nested data structures.
-
-  Handles maps, keyword lists, and regular lists appropriately.
-  """
-  @spec deep_remove_nils(term()) :: term()
-  def deep_remove_nils(nil), do: nil
-
-  def deep_remove_nils(term) when is_map(term) do
-    Enum.reduce(term, %{}, fn {k, v}, acc ->
-      if is_nil(v) do
-        acc
-      else
-        Map.put(acc, k, deep_remove_nils(v))
-      end
-    end)
-  end
-
-  def deep_remove_nils(term) when is_list(term) do
-    if Keyword.keyword?(term) do
-      reduce_non_nils(term, fn {_k, v} -> is_nil(v) end, fn {k, v} -> {k, deep_remove_nils(v)} end)
-    else
-      reduce_non_nils(term, &is_nil/1, &deep_remove_nils/1)
-    end
-  end
-
-  def deep_remove_nils(term), do: term
-
-  defp reduce_non_nils(list, nil_check_fn, transform_fn) do
-    list
-    |> Enum.reduce([], fn item, acc ->
-      if nil_check_fn.(item) do
-        acc
-      else
-        [transform_fn.(item) | acc]
-      end
-    end)
-    |> Enum.reverse()
-  end
-
-  @doc """
-  Builds common headers for Datadog trace requests.
-  """
-  @spec build_headers(non_neg_integer(), String.t() | nil) :: [{String.t(), String.t()}]
-  def build_headers(trace_count, container_id \\ nil) do
-    base_headers = [
-      {"Content-Type", "application/msgpack"},
-      {"Datadog-Meta-Lang", "elixir"},
-      {"Datadog-Meta-Lang-Version", System.version()},
-      {"Datadog-Meta-Tracer-Version", Application.spec(:opentelemetry_datadog)[:vsn]},
-      {"X-Datadog-Trace-Count", trace_count}
-    ]
-
-    container_headers =
-      if container_id, do: [{"Datadog-Container-ID", container_id}], else: []
-
-    base_headers ++ container_headers
   end
 
   @doc """
@@ -204,7 +127,7 @@ defmodule OpentelemetryDatadog.Utils.Exporter do
   ## Examples
 
       iex> resource_tuple = build_test_resource()
-      iex> data = OpentelemetryDatadog.Utils.Exporter.build_enhanced_resource_data(resource_tuple)
+      iex> data = OpentelemetryDatadog.Formatter.build_enhanced_resource_data(resource_tuple)
       iex> Map.has_key?(data, :resource_attributes)
       true
       iex> Map.has_key?(data.resource_attributes, "service.name")
@@ -229,7 +152,7 @@ defmodule OpentelemetryDatadog.Utils.Exporter do
   ## Examples
 
       iex> data = %{resource_map: %{"service.name" => "my-service"}}
-      iex> attrs = OpentelemetryDatadog.Utils.Exporter.get_resource_attributes(data)
+      iex> attrs = OpentelemetryDatadog.Formatter.get_resource_attributes(data)
       iex> attrs["service.name"]
       "my-service"
   """
@@ -237,4 +160,10 @@ defmodule OpentelemetryDatadog.Utils.Exporter do
   def get_resource_attributes(resource_data) do
     ResourceAttributes.from_resource_data(resource_data)
   end
+
+  @doc """
+  Accessor function for span record.
+  """
+  @spec get_span(span_record()) :: otel_span()
+  def get_span(span_record), do: span(span_record)
 end

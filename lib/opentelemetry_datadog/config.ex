@@ -431,14 +431,14 @@ defmodule OpentelemetryDatadog.Config do
   @doc """
   Returns the current configuration for the exporter.
 
-  This loads the standard configuration and adds the v0.5 protocol setting.
+  This loads the standard configuration from environment variables.
 
   ## Examples
 
       iex> System.put_env("DD_AGENT_HOST", "localhost")
       iex> {:ok, config} = OpentelemetryDatadog.Config.get_config()
-      iex> config[:protocol]
-      :v05
+      iex> config[:host]
+      "localhost"
   """
   @spec get_config() :: {:ok, keyword()} | {:error, validation_error()}
   def get_config do
@@ -447,7 +447,6 @@ defmodule OpentelemetryDatadog.Config do
         exporter_config =
           config
           |> to_exporter_config()
-          |> to_exporter_config_with_protocol()
 
         {:ok, exporter_config}
 
@@ -463,8 +462,8 @@ defmodule OpentelemetryDatadog.Config do
 
       iex> System.put_env("DD_AGENT_HOST", "localhost")
       iex> config = OpentelemetryDatadog.Config.get_config!()
-      iex> config[:protocol]
-      :v05
+      iex> config[:host]
+      "localhost"
   """
   @spec get_config!() :: keyword()
   def get_config! do

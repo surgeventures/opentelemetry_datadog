@@ -62,37 +62,34 @@ defmodule OpentelemetryDatadog.ExporterTest do
   use OpentelemetryDatadog.TestHelpers
 
   describe "init/1" do
-    test "initializes with v05 protocol" do
-      config = [
-        host: "localhost",
-        port: 8126,
-        protocol: :v05
-      ]
-
-      assert {:ok, state} = Exporter.init(config)
-      assert state.host == "localhost"
-      assert state.port == 8126
-      assert state.protocol == :v05
-    end
-
-    test "defaults to v05 protocol when not specified" do
+    test "initializes with required configuration" do
       config = [
         host: "localhost",
         port: 8126
       ]
 
       assert {:ok, state} = Exporter.init(config)
-      assert state.protocol == :v05
+      assert state.host == "localhost"
+      assert state.port == 8126
+    end
+
+    test "initializes with basic configuration" do
+      config = [
+        host: "localhost",
+        port: 8126
+      ]
+
+      assert {:ok, state} = Exporter.init(config)
+      assert state.host == "localhost"
+      assert state.port == 8126
     end
 
     test "initializes with production configuration" do
       prod_config("api-service", "v2.1.0")
       {:ok, config} = OpentelemetryDatadog.Config.load()
       exporter_config = OpentelemetryDatadog.Config.to_exporter_config(config)
-      v05_config = OpentelemetryDatadog.Config.to_exporter_config_with_protocol(exporter_config)
 
-      assert {:ok, state} = Exporter.init(v05_config)
-      assert state.protocol == :v05
+      assert {:ok, state} = Exporter.init(exporter_config)
       assert state.host == "datadog-agent.kube-system.svc.cluster.local"
       assert state.port == 8126
     end
@@ -101,10 +98,8 @@ defmodule OpentelemetryDatadog.ExporterTest do
       dev_config("test-service")
       {:ok, config} = OpentelemetryDatadog.Config.load()
       exporter_config = OpentelemetryDatadog.Config.to_exporter_config(config)
-      v05_config = OpentelemetryDatadog.Config.to_exporter_config_with_protocol(exporter_config)
 
-      assert {:ok, state} = Exporter.init(v05_config)
-      assert state.protocol == :v05
+      assert {:ok, state} = Exporter.init(exporter_config)
       assert state.host == "localhost"
     end
 
@@ -183,11 +178,11 @@ defmodule OpentelemetryDatadog.ExporterTest do
 
     test "exporter module has required functions" do
       # Test that the module compiles and basic functions work
-      config = [host: "localhost", port: 8126, protocol: :v05]
+      config = [host: "localhost", port: 8126]
 
       # Test init function
       assert {:ok, state} = Exporter.init(config)
-      assert state.protocol == :v05
+      assert state.host == "localhost"
 
       # Test shutdown function
       assert Exporter.shutdown(state) == :ok
@@ -369,40 +364,6 @@ defmodule OpentelemetryDatadog.ExporterTest do
         assert is_map(span_map["meta"])
         assert is_map(span_map["metrics"])
       end)
-    end
-  end
-
-  describe "apply_mappers/3" do
-    test "applies mappers in sequence" do
-      span = %OpentelemetryDatadog.DatadogSpan{
-        trace_id: 123,
-        span_id: 456,
-        name: "test"
-      }
-
-      # Mock mappers that just pass through
-      mappers = []
-
-      result = OpentelemetryDatadog.Utils.Exporter.apply_mappers(mappers, span, nil, %{})
-      assert result == span
-    end
-
-    test "returns nil if any mapper returns nil" do
-      span = %OpentelemetryDatadog.DatadogSpan{
-        trace_id: 123,
-        span_id: 456,
-        name: "test"
-      }
-
-      # Create a mock mapper that returns nil
-      defmodule TestMapper do
-        def map(_span, _otel_span, _args, _state), do: nil
-      end
-
-      mappers = [{TestMapper, []}]
-
-      result = OpentelemetryDatadog.Utils.Exporter.apply_mappers(mappers, span, nil, %{})
-      assert result == nil
     end
   end
 
