@@ -30,7 +30,10 @@ defmodule OpentelemetryDatadog.MixProject do
     [
       {:opentelemetry, "~> 1.4", runtime: false},
       {:msgpax, "~> 2.4"},
-      {:req, "~> 0.4.14"}
+      {:req, "~> 0.4.14"},
+      # Optional: For context propagation across processes and tasks
+      {:opentelemetry_process_propagator, "~> 0.3.0", optional: true},
+      {:opentelemetry_function, "~> 0.1.0", optional: true}
     ]
   end
 

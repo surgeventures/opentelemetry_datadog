@@ -74,6 +74,8 @@ config :opentelemetry,
   traces_exporter: {OpentelemetryDatadog.Exporter, []},
   sampler: {:otel_sampler_parent_based, %{root: {:otel_sampler_always_on, %{}}}},
   text_map_propagators: [OpentelemetryDatadog.Propagator.Datadog],
+  propagators: [:otel_process_propagator],
+  instrumentations: [:otel_function_wrapper],
   resource: %{
     "service.name": "my-app",
     "deployment.environment": "production",
