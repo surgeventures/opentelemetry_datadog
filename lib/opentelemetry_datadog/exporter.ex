@@ -44,6 +44,7 @@ defmodule OpentelemetryDatadog.Exporter do
 
   alias OpentelemetryDatadog.{Mapper, Encoder, Formatter}
   alias OpentelemetryDatadog.Utils.Span
+  alias Monitor.OTelTracer
 
   @mappers [
     {Mapper.LiftError, []},
@@ -68,72 +69,140 @@ defmodule OpentelemetryDatadog.Exporter do
 
   @impl true
   def export(:traces, tid, resource, state) do
-    endpoint = "/v0.5/traces"
-    start_metadata = %{endpoint: endpoint, host: state.host, port: state.port}
-
-    :telemetry.span(
-      [:opentelemetry_datadog, :export],
-      start_metadata,
+    OTelTracer.span(
+      "datadog.export",
+      [
+        kind: :client,
+        attributes: %{
+          "datadog.endpoint" => "/v0.5/traces",
+          "datadog.host" => state.host,
+          "datadog.port" => state.port,
+          "export.protocol" => "v0.5"
+        }
+      ],
       fn ->
-        data = Formatter.build_resource_data(resource)
+        endpoint = "/v0.5/traces"
+        start_metadata = %{endpoint: endpoint, host: state.host, port: state.port}
 
-        formatted =
-          :ets.foldl(
-            fn span, acc ->
-              case format_span_v05(span, data, state) do
-                [] ->
-                  Logger.warning("Span skipped: #{inspect(span)}")
-                  acc
+        :telemetry.span(
+          [:opentelemetry_datadog, :export],
+          start_metadata,
+          fn ->
+            OTelTracer.add_event("export.started")
 
-                span_data ->
-                  [span_data | acc]
-              end
-            end,
-            [],
-            tid
-          )
+            data =
+              OTelTracer.span("datadog.build_resource_data", fn ->
+                Formatter.build_resource_data(resource)
+              end)
 
-        count = Enum.count(formatted)
-        headers = build_headers(count, state.container_id)
+            {formatted, span_count} =
+              OTelTracer.span(
+                "datadog.format_spans",
+                [
+                  attributes: %{"operation" => "format_spans"}
+                ],
+                fn ->
+                  formatted =
+                    :ets.foldl(
+                      fn span, acc ->
+                        case format_span_v05(span, data, state) do
+                          [] ->
+                            Logger.warning("Span skipped: #{inspect(span)}")
+                            acc
 
-        response =
-          formatted
-          |> encode_v05()
-          |> push_v05(headers, state)
+                          span_data ->
+                            [span_data | acc]
+                        end
+                      end,
+                      [],
+                      tid
+                    )
 
-        stop_metadata = Map.merge(start_metadata, %{span_count: count})
+                  count = Enum.count(formatted)
+                  OTelTracer.set_attribute("formatted.span_count", count)
+                  {formatted, count}
+                end
+              )
 
-        case response do
-          {:ok, %{status: status_code}} when status_code in 200..299 ->
-            {response, Map.put(stop_metadata, :status_code, status_code)}
+            headers = build_headers(span_count, state.container_id)
+            OTelTracer.set_attribute("export.span_count", span_count)
 
-          {:ok, %{status: status_code}} ->
-            Logger.error("Trace export failed with HTTP error", response: response)
+            response =
+              OTelTracer.span(
+                "datadog.http_request",
+                [
+                  kind: :client,
+                  attributes: %{
+                    "http.method" => "POST",
+                    "http.url" => "http://#{state.host}:#{state.port}/v0.5/traces",
+                    "http.request_content_length" => byte_size(encode_v05(formatted))
+                  }
+                ],
+                fn ->
+                  formatted
+                  |> encode_v05()
+                  |> push_v05(headers, state)
+                end
+              )
 
-            error_metadata =
-              Map.merge(stop_metadata, %{
-                error: "HTTP error: #{status_code}",
-                retry: false,
-                status_code: status_code
-              })
+            stop_metadata = Map.merge(start_metadata, %{span_count: span_count})
 
-            {response, error_metadata}
+            case response do
+              {:ok, %{status: status_code}} when status_code in 200..299 ->
+                OTelTracer.add_event("export.success", %{
+                  "http.status_code" => status_code,
+                  "spans.exported" => span_count
+                })
 
-          {:error, error} ->
-            Logger.error("Trace export failed with request error", error: error)
+                OTelTracer.set_status(:ok)
+                OTelTracer.set_attribute("http.response.status_code", status_code)
+                {response, Map.put(stop_metadata, :status_code, status_code)}
 
-            error_metadata =
-              Map.merge(stop_metadata, %{
-                error: inspect(error),
-                retry: true
-              })
+              {:ok, %{status: status_code}} ->
+                Logger.error("Trace export failed with HTTP error", response: response)
 
-            {response, error_metadata}
-        end
+                OTelTracer.add_event("export.http_error", %{
+                  "http.status_code" => status_code,
+                  "error.type" => "http_error"
+                })
+
+                OTelTracer.set_status(:error, "HTTP error: #{status_code}")
+                OTelTracer.set_attribute("http.response.status_code", status_code)
+
+                error_metadata =
+                  Map.merge(stop_metadata, %{
+                    error: "HTTP error: #{status_code}",
+                    retry: false,
+                    status_code: status_code
+                  })
+
+                {response, error_metadata}
+
+              {:error, error} ->
+                Logger.error("Trace export failed with request error", error: error)
+
+                OTelTracer.add_event("export.request_error", %{
+                  "error.type" => "request_error",
+                  "error.message" => inspect(error)
+                })
+
+                OTelTracer.record_exception(error)
+                OTelTracer.set_status(:error, "Request failed: #{inspect(error)}")
+
+                error_metadata =
+                  Map.merge(stop_metadata, %{
+                    error: "Request error: #{inspect(error)}",
+                    retry: false
+                  })
+
+                {response, error_metadata}
+            end
+          end
+        )
+
+        :ok
       end
     )
-
-    :ok
   end
 
   def export(:metrics, _tid, _resource, _state) do
@@ -166,88 +235,46 @@ defmodule OpentelemetryDatadog.Exporter do
       end
 
     Req.put(
-      url,
+      url: url,
       body: body,
       headers: headers,
-      retry: :transient,
-      retry_delay: &retry_delay/1,
-      retry_log_level: false
+      decode_json: false,
+      decode_body: false
     )
   end
 
-  def format_span_v05(span_record, data, state) do
-    processing_state = Formatter.build_processing_state(span_record, data)
+  def format_span_v05(span, resource_data, _state) do
+    span
+    |> run_mappers(@mappers, [])
+    |> case do
+      # Skip spans that couldn't be processed
+      %{skip: true} -> []
+      span_data -> [span_data]
+    end
+    |> Enum.map(&Map.merge(&1, resource_data))
+  end
 
-    dd_span = Formatter.format_span_base(span_record, data, state)
+  defp run_mappers(span, [], _acc) do
+    span
+  end
 
-    dd_span_kind = Atom.to_string(Keyword.fetch!(Formatter.get_span(span_record), :kind))
-
-    dd_span = %{
-      dd_span
-      | meta: Map.put(dd_span.meta, :env, Span.get_env_from_resource(data)),
-        service: Span.get_service_from_resource(data),
-        resource: Span.get_resource_from_span(dd_span.name, dd_span.meta),
-        type: Span.get_type_from_span(dd_span_kind),
-        error: 0
-    }
-
-    span = apply_mappers(dd_span, Formatter.get_span(span_record), processing_state)
-
-    case span do
-      nil ->
-        []
-
-      span ->
-        span_map = %{
-          trace_id: span.trace_id,
-          span_id: span.span_id,
-          parent_id: span.parent_id,
-          name: span.name,
-          service: span.service || "unknown-service",
-          resource: span.resource || span.name,
-          type: span.type || "custom",
-          start: span.start,
-          duration: span.duration,
-          error: span.error || 0,
-          meta: span.meta || %{},
-          metrics: span.metrics || %{}
-        }
-
-        span_map
+  defp run_mappers(span, [{mapper, config} | rest], acc) do
+    case mapper.map(span, config) do
+      %{skip: true} = span_data -> span_data
+      span_data -> run_mappers(span_data, rest, acc)
     end
   end
 
-  def apply_mappers(span, otel_span, state) do
-    Formatter.apply_mappers(@mappers, span, otel_span, state)
-  end
-
-  @doc """
-  Builds common headers for Datadog trace requests.
-  """
-  @spec build_headers(non_neg_integer(), String.t() | nil) :: [{String.t(), String.t()}]
-  def build_headers(trace_count, container_id \\ nil) do
-    base_headers = [
+  defp build_headers(span_count, container_id) do
+    headers = [
       {"Content-Type", "application/msgpack"},
-      {"Datadog-Meta-Lang", "elixir"},
-      {"Datadog-Meta-Lang-Version", System.version()},
-      {"Datadog-Meta-Tracer-Version", Application.spec(:opentelemetry_datadog)[:vsn]},
-      {"X-Datadog-Trace-Count", trace_count}
+      {"Datadog-Meta-Tracer-Version", "opentelemetry_elixir"},
+      {"X-Datadog-Trace-Count", to_string(span_count)}
     ]
 
-    container_headers =
-      if container_id, do: [{"Datadog-Container-ID", container_id}], else: []
-
-    base_headers ++ container_headers
-  end
-
-  @doc """
-  Calculates retry delay with exponential backoff and jitter.
-
-  Uses 3 retries with 10% jitter.
-  Example delays: 484ms, 945ms, 1908ms
-  """
-  @spec retry_delay(non_neg_integer()) :: non_neg_integer()
-  def retry_delay(attempt) do
-    trunc(Integer.pow(2, attempt) * 500 * (1 - 0.1 * :rand.uniform()))
+    case container_id do
+      nil -> headers
+      id -> [{"Datadog-Container-ID", id} | headers]
+    end
   end
 end

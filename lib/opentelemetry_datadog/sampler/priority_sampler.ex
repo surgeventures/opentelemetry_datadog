@@ -13,6 +13,7 @@ defmodule OpentelemetryDatadog.Sampler.PrioritySampler do
 
   require Logger
   alias OpentelemetryDatadog.DatadogConstants
+  alias Monitor.OTelTracer
 
   @max_uint64 18_446_744_073_709_551_615
   @knuth_factor 111_111_111_111_111_1111
@@ -62,17 +63,51 @@ defmodule OpentelemetryDatadog.Sampler.PrioritySampler do
 
   @impl true
   def should_sample(ctx, trace_id, _links, span_name, span_kind, attributes, config) do
-    span_ctx = :otel_tracer.current_span_ctx(ctx)
+    OTelTracer.span(
+      "datadog.sampling_decision",
+      [
+        kind: :internal,
+        attributes: %{
+          "sampling.span_name" => to_string(span_name),
+          "sampling.span_kind" => to_string(span_kind),
+          "sampling.default_rate" => config.default_rate,
+          "sampling.rules_count" => length(config.rules || [])
+        }
+      ],
+      fn ->
+        span_ctx = :otel_tracer.current_span_ctx(ctx)
 
-    # Check for manual sampling priority first
-    case get_manual_sampling_decision(ctx, attributes, config) do
-      {decision, priority} when decision != nil ->
-        build_sampling_result(decision, priority, span_ctx, :MANUAL, config)
+        # Check for manual sampling priority first
+        case get_manual_sampling_decision(ctx, attributes, config) do
+          {decision, priority} when decision != nil ->
+            OTelTracer.add_event("sampling.manual_decision", %{
+              "decision" => to_string(decision),
+              "priority" => priority,
+              "source" => "manual"
+            })
 
-      _ ->
-        # Apply automatic sampling logic
-        apply_automatic_sampling(trace_id, span_name, span_kind, attributes, span_ctx, config)
-    end
+            result = build_sampling_result(decision, priority, span_ctx, :MANUAL, config)
+            OTelTracer.set_status(:ok)
+            result
+
+          _ ->
+            OTelTracer.add_event("sampling.applying_automatic")
+            # Apply automatic sampling logic
+            result =
+              apply_automatic_sampling(
+                trace_id,
+                span_name,
+                span_kind,
+                attributes,
+                span_ctx,
+                config
+              )
+
+            OTelTracer.set_status(:ok)
+            result
+        end
+      end
+    )
   end
 
   defp get_manual_sampling_decision(ctx, attributes, config) do
@@ -109,6 +144,12 @@ defmodule OpentelemetryDatadog.Sampler.PrioritySampler do
     sampling_rate = if rule, do: rule.rate, else: config.default_rate
     forced_priority = if rule, do: rule.priority, else: nil
     sampled = should_sample_probabilistic?(trace_id, sampling_rate)
+
+    OTelTracer.set_attributes(%{
+      "sampling.rule_matched" => rule != nil,
+      "sampling.rate_used" => sampling_rate,
+      "sampling.probabilistic_result" => sampled
+    })
 
     {decision, priority} =
       case {sampled, forced_priority} do

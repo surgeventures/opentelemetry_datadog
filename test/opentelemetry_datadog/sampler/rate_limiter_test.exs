@@ -139,7 +139,7 @@ defmodule OpentelemetryDatadog.Sampler.RateLimiterTest do
           max_traces_per_second: 100
         )
 
-      {decision, attributes, _trace_state} =
+      {_decision, attributes, _trace_state} =
         RateLimiter.should_sample(
           %{},
           123_456_789,
@@ -358,7 +358,7 @@ defmodule OpentelemetryDatadog.Sampler.RateLimiterTest do
 
       # Count successes and rate limited requests
       successes =
-        Enum.count(results, fn {decision, attrs, _} ->
+        Enum.count(results, fn {decision, _attrs, _} ->
           decision == :record_and_sample
         end)
 

@@ -25,6 +25,7 @@ defmodule OpentelemetryDatadog.Config do
 
   alias OpentelemetryDatadog.{ConfigError, DatadogConstants}
   alias OpentelemetryDatadog.Config.Parser
+  alias Monitor.OTelTracer
 
   @enforce_keys [:host, :port]
   defstruct [
@@ -56,28 +57,55 @@ defmodule OpentelemetryDatadog.Config do
   @doc "Loads configuration from environment variables."
   @spec load() :: {:ok, t()} | {:error, validation_error()}
   def load do
-    with {:ok, host} <- get_required_env("DD_AGENT_HOST"),
-         {:ok, port} <- get_port(),
-         {:ok, sample_rate} <- get_sample_rate(),
-         {:ok, tags} <- get_tags(),
-         {:ok, timeout_ms} <- get_timeout_ms(),
-         {:ok, connect_timeout_ms} <- get_connect_timeout_ms() do
-      config = %__MODULE__{
-        host: host,
-        port: port,
-        service: get_service(),
-        version: get_version(),
-        env: get_environment(),
-        tags: tags,
-        sample_rate: sample_rate,
-        timeout_ms: timeout_ms,
-        connect_timeout_ms: connect_timeout_ms
-      }
+    OTelTracer.span(
+      "datadog.config.load",
+      [
+        kind: :internal,
+        attributes: %{"operation" => "load_configuration"}
+      ],
+      fn ->
+        OTelTracer.add_event("config.parsing.started")
 
-      {:ok, config}
-    else
-      {:error, _, _} = error -> error
-    end
+        result =
+          with {:ok, host} <- get_required_env("DD_AGENT_HOST"),
+               {:ok, port} <- get_port(),
+               {:ok, sample_rate} <- get_sample_rate(),
+               {:ok, tags} <- get_tags(),
+               {:ok, timeout_ms} <- get_timeout_ms(),
+               {:ok, connect_timeout_ms} <- get_connect_timeout_ms() do
+            config = %__MODULE__{
+              host: host,
+              port: port,
+              service: get_service(),
+              version: get_version(),
+              env: get_environment(),
+              tags: tags,
+              sample_rate: sample_rate,
+              timeout_ms: timeout_ms,
+              connect_timeout_ms: connect_timeout_ms
+            }
+
+            OTelTracer.add_event("config.loaded.success", %{
+              "service" => config.service || "unknown",
+              "host" => config.host,
+              "port" => config.port
+            })
+
+            OTelTracer.set_status(:ok)
+            {:ok, config}
+          else
+            {:error, _, _} = error ->
+              OTelTracer.add_event("config.parsing.failed", %{
+                "error" => inspect(error)
+              })
+
+              OTelTracer.set_status(:error, "Config parsing failed")
+              error
+          end
+
+        result
+      end
+    )
   end
 
   @doc "Loads configuration from environment variables, raising an exception on failure."
