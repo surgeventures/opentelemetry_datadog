@@ -55,8 +55,8 @@ defmodule OpentelemetryDatadog.ExporterTest do
     end
   end
 
-  describe "format_span_v05/3" do
-    test "formats span with required v0.5 fields" do
+  describe "format_span/3" do
+    test "formats span with required fields" do
       span_data = %{
         trace_id: 123_456_789,
         span_id: 987_654_321,
@@ -73,7 +73,7 @@ defmodule OpentelemetryDatadog.ExporterTest do
         }
       }
 
-      assert function_exported?(Exporter, :format_span_v05, 3)
+      assert function_exported?(Exporter, :format_span, 3)
 
       assert span_data.trace_id == 123_456_789
       assert data.resource_map["service.name"] == "test-service"
@@ -100,7 +100,7 @@ defmodule OpentelemetryDatadog.ExporterTest do
     end
   end
 
-  describe "encode_v05/1" do
+  describe "encode/1" do
     test "encodes valid span data" do
       spans = [
         %{
@@ -119,7 +119,7 @@ defmodule OpentelemetryDatadog.ExporterTest do
         }
       ]
 
-      result = Exporter.encode_v05(spans)
+      result = Exporter.encode(spans)
       assert is_binary(result)
     end
 
@@ -130,8 +130,8 @@ defmodule OpentelemetryDatadog.ExporterTest do
         }
       ]
 
-      assert_raise RuntimeError, ~r/Failed to encode spans for v0.5/, fn ->
-        Exporter.encode_v05(invalid_spans)
+      assert_raise RuntimeError, ~r/Failed to encode spans/, fn ->
+        Exporter.encode(invalid_spans)
       end
     end
   end
@@ -153,7 +153,7 @@ defmodule OpentelemetryDatadog.ExporterTest do
         metrics: %{"_sampling_priority_v1" => 1.0}
       }
 
-      serialized_payload = Exporter.encode_v05([known_span])
+      serialized_payload = Exporter.encode([known_span])
       unpacked_data = Msgpax.unpack!(serialized_payload)
 
       assert is_list(unpacked_data)
@@ -205,7 +205,7 @@ defmodule OpentelemetryDatadog.ExporterTest do
         metrics: %{}
       }
 
-      serialized_payload = Exporter.encode_v05([known_span])
+      serialized_payload = Exporter.encode([known_span])
       unpacked_data = Msgpax.unpack!(serialized_payload)
 
       span_map = List.first(unpacked_data)
@@ -247,7 +247,7 @@ defmodule OpentelemetryDatadog.ExporterTest do
         }
       ]
 
-      serialized_payload = Exporter.encode_v05(spans)
+      serialized_payload = Exporter.encode(spans)
       unpacked_data = Msgpax.unpack!(serialized_payload)
 
       assert is_list(unpacked_data)

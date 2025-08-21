@@ -72,7 +72,7 @@ defmodule OpentelemetryDatadog.Exporter do
         formatted =
           :ets.foldl(
             fn span, acc ->
-              case format_span_v05(span, data, state) do
+              case format_span(span, data, state) do
                 [] ->
                   Logger.warning("Span skipped: #{inspect(span)}")
                   acc
@@ -90,8 +90,8 @@ defmodule OpentelemetryDatadog.Exporter do
 
         response =
           formatted
-          |> encode_v05()
-          |> push_v05(headers, state)
+          |> encode()
+          |> push(headers, state)
 
         stop_metadata = Map.merge(start_metadata, %{span_count: count})
 
@@ -137,18 +137,18 @@ defmodule OpentelemetryDatadog.Exporter do
     :ok
   end
 
-  def encode_v05(data) do
+  def encode(data) do
     case Encoder.encode(data) do
       {:ok, encoded} ->
         encoded
 
       {:error, error} ->
-        Logger.error("Failed to encode spans for v0.5", error: error)
-        raise "Failed to encode spans for v0.5: #{inspect(error)}"
+        Logger.error("Failed to encode spans", error: error)
+        raise "Failed to encode spans: #{inspect(error)}"
     end
   end
 
-  def push_v05(body, headers, %State{host: host, port: port}) do
+  def push(body, headers, %State{host: host, port: port}) do
     Req.put(
       "#{host}:#{port}/v0.5/traces",
       body: body,
@@ -159,7 +159,7 @@ defmodule OpentelemetryDatadog.Exporter do
     )
   end
 
-  def format_span_v05(span_record, data, state) do
+  def format_span(span_record, data, state) do
     processing_state = Formatter.build_processing_state(span_record, data)
 
     dd_span = Formatter.format_span_base(span_record, data, state)
@@ -213,8 +213,9 @@ defmodule OpentelemetryDatadog.Exporter do
     base_headers = [
       {"Content-Type", "application/msgpack"},
       {"Datadog-Meta-Lang", "elixir"},
-      {"Datadog-Meta-Lang-Version", @elixir_version},
-      {"Datadog-Meta-Tracer-Version", @tracer_version},
+      {"Datadog-Meta-Lang-Version", System.version()},
+      {"Datadog-Meta-Tracer-Version",
+       Application.spec(:opentelemetry_datadog)[:vsn] || "unknown"},
       {"X-Datadog-Trace-Count", to_string(trace_count)}
     ]
 
