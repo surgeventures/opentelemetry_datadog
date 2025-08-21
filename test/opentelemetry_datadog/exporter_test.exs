@@ -280,7 +280,7 @@ defmodule OpentelemetryDatadog.ExporterTest do
 
   describe "export/4" do
     test "handles metrics export" do
-      state = %Exporter.State{protocol: :v05}
+      state = %Exporter.State{host: "localhost", port: 8126, container_id: nil}
       assert Exporter.export(:metrics, nil, nil, state) == :ok
     end
 
@@ -293,7 +293,7 @@ defmodule OpentelemetryDatadog.ExporterTest do
 
   describe "shutdown/1" do
     test "shuts down cleanly" do
-      state = %Exporter.State{}
+      state = %Exporter.State{host: "localhost", port: 8126, container_id: nil}
       assert Exporter.shutdown(state) == :ok
     end
   end

@@ -35,8 +35,7 @@ defmodule OpentelemetryDatadog.Exporter do
       :host,
       :port,
       :service_name,
-      :container_id,
-      :protocol
+      :container_id
     ]
   end
 
@@ -50,13 +49,10 @@ defmodule OpentelemetryDatadog.Exporter do
 
   @impl true
   def init(config) do
-    protocol = Keyword.get(config, :protocol, :v05)
-
     state = %State{
       host: Keyword.fetch!(config, :host),
       port: Keyword.fetch!(config, :port),
-      container_id: Span.get_container_id(),
-      protocol: protocol
+      container_id: Span.get_container_id()
     }
 
     {:ok, state}
@@ -217,9 +213,9 @@ defmodule OpentelemetryDatadog.Exporter do
     base_headers = [
       {"Content-Type", "application/msgpack"},
       {"Datadog-Meta-Lang", "elixir"},
-      {"Datadog-Meta-Lang-Version", System.version()},
-      {"Datadog-Meta-Tracer-Version", Application.spec(:opentelemetry_datadog)[:vsn]},
-      {"X-Datadog-Trace-Count", trace_count}
+      {"Datadog-Meta-Lang-Version", @elixir_version},
+      {"Datadog-Meta-Tracer-Version", @tracer_version},
+      {"X-Datadog-Trace-Count", to_string(trace_count)}
     ]
 
     container_headers =
