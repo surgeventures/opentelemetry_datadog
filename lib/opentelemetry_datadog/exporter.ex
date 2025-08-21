@@ -160,8 +160,6 @@ defmodule OpentelemetryDatadog.Exporter do
   end
 
   def format_span(span_record, data, state) do
-    processing_state = Formatter.build_processing_state(span_record, data)
-
     dd_span = Formatter.format_span_base(span_record, data, state)
 
     dd_span_kind = Atom.to_string(Keyword.fetch!(Formatter.get_span(span_record), :kind))
@@ -175,7 +173,7 @@ defmodule OpentelemetryDatadog.Exporter do
         error: 0
     }
 
-    span = apply_mappers(dd_span, Formatter.get_span(span_record), processing_state)
+    span = apply_mappers(dd_span, Formatter.get_span(span_record), data)
 
     case span do
       nil ->

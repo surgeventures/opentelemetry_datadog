@@ -88,21 +88,6 @@ defmodule OpentelemetryDatadog.Formatter do
   defp apply_mappers_recursive([], span, _, _), do: span
 
   @doc """
-  Builds the processing state for span formatting.
-
-  Combines OpenTelemetry events with resource data.
-  """
-  @spec build_processing_state(span_record(), span_data()) :: map()
-  def build_processing_state(span_record, data) do
-    span = span(span_record)
-
-    %{
-      events: :otel_events.list(Keyword.fetch!(span, :events))
-    }
-    |> Map.merge(data)
-  end
-
-  @doc """
   Builds resource data structure from OpenTelemetry resource.
   """
   @spec build_resource_data(tuple()) :: map()
