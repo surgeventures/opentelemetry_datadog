@@ -31,13 +31,15 @@ defmodule OpentelemetryDatadog.Formatter do
   @type span_record :: tuple()
 
   @doc """
-  Formats an OpenTelemetry span into a DatadogSpan structure.
+  Formats an OpenTelemetry span into a complete DatadogSpan structure.
 
-  This is the base formatting logic that converts OpenTelemetry spans
-  into the internal DatadogSpan representation.
+  This function handles all the span formatting logic, including:
+  - Basic span data conversion
+  - Service, environment, resource, and type inference
+  - Metadata processing
   """
-  @spec format_span_base(span_record(), span_data(), map()) :: DatadogSpan.t()
-  def format_span_base(span_record, _data, _state) do
+  @spec format_span(span_record(), span_data(), map()) :: DatadogSpan.t()
+  def format_span(span_record, data, _state) do
     span = span(span_record)
     attributes_record = Keyword.fetch!(span, :attributes)
     attributes_data = attributes(attributes_record)
@@ -46,25 +48,69 @@ defmodule OpentelemetryDatadog.Formatter do
     start_time_nanos = :opentelemetry.timestamp_to_nano(Keyword.fetch!(span, :start_time))
     end_time_nanos = :opentelemetry.timestamp_to_nano(Keyword.fetch!(span, :end_time))
 
-    meta =
+    # Get instrumentation scope for advanced type inference
+    {:instrumentation_scope, scope_name, _version, _opts} =
+      Keyword.fetch!(span, :instrumentation_scope)
+
+    # Build base metadata
+    base_meta =
       Keyword.fetch!(attributes_data, :map)
       |> Map.put(:"span.kind", dd_span_kind)
+      |> Map.put(:env, Span.get_env_from_resource(data))
       |> Enum.map(fn {k, v} -> {k, Span.term_to_string(v)} end)
       |> Enum.into(%{})
 
     name = Keyword.fetch!(span, :name)
+
+    # Advanced inference using instrumentation scope and attributes
+    service = infer_service_name(data, base_meta)
+    resource = infer_resource_name(name, base_meta)
+    type = infer_span_type(scope_name, dd_span_kind, base_meta)
+
+    # Add debug metadata
+    meta =
+      base_meta
+      |> Map.put(:"evaled.resource", resource)
+      |> Map.put(:"evaled.type", type)
+      |> Map.put(:"evaled.service", service)
+      |> Map.put(:"evaled.name", name)
 
     %DatadogSpan{
       trace_id: Span.id_to_datadog_id(Keyword.fetch!(span, :trace_id)),
       span_id: Keyword.fetch!(span, :span_id),
       parent_id: Span.nil_if_undefined(Keyword.fetch!(span, :parent_span_id)),
       name: name,
+      service: service,
+      resource: resource,
+      type: type,
       start: start_time_nanos,
       duration: end_time_nanos - start_time_nanos,
+      error: 0,
       meta: meta,
       metrics: %{}
     }
   end
+
+  # Advanced service name inference
+  defp infer_service_name(data, %{"db.url": url, "db.instance": instance}) do
+    case URI.parse(url) do
+      %URI{host: host} when is_binary(host) -> "#{host}/#{instance}"
+      _ -> Span.get_service_from_resource(data)
+    end
+  end
+
+  defp infer_service_name(data, _meta), do: Span.get_service_from_resource(data)
+
+  # Advanced resource name inference
+  defp infer_resource_name(_name, %{:"http.target" => target}), do: target
+  defp infer_resource_name(_name, %{:"db.statement" => statement}), do: statement
+  defp infer_resource_name(name, meta), do: Span.get_resource_from_span(name, meta)
+
+  # Advanced span type inference using instrumentation scope
+  defp infer_span_type("opentelemetry_ecto", _kind, _meta), do: "db"
+  defp infer_span_type("opentelemetry_liveview", _kind, _meta), do: "web"
+  defp infer_span_type("opentelemetry_phoenix", _kind, _meta), do: "web"
+  defp infer_span_type(_scope, kind, _meta), do: Span.get_type_from_span(kind)
 
   @doc """
   Applies a list of mappers to transform a DatadogSpan.

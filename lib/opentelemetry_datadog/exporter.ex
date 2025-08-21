@@ -43,8 +43,7 @@ defmodule OpentelemetryDatadog.Exporter do
   alias OpentelemetryDatadog.Utils.Span
 
   @mappers [
-    {Mapper.LiftError, []},
-    {Mapper.InferDatadogFields, []}
+    {Mapper.LiftError, []}
   ]
 
   @impl true
@@ -160,18 +159,7 @@ defmodule OpentelemetryDatadog.Exporter do
   end
 
   def format_span(span_record, data, state) do
-    dd_span = Formatter.format_span_base(span_record, data, state)
-
-    dd_span_kind = Atom.to_string(Keyword.fetch!(Formatter.get_span(span_record), :kind))
-
-    dd_span = %{
-      dd_span
-      | meta: Map.put(dd_span.meta, :env, Span.get_env_from_resource(data)),
-        service: Span.get_service_from_resource(data),
-        resource: Span.get_resource_from_span(dd_span.name, dd_span.meta),
-        type: Span.get_type_from_span(dd_span_kind),
-        error: 0
-    }
+    dd_span = Formatter.format_span(span_record, data, state)
 
     span = apply_mappers(dd_span, Formatter.get_span(span_record), data)
 
