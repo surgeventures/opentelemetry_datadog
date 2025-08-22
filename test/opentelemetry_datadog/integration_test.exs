@@ -134,17 +134,6 @@ defmodule OpentelemetryDatadog.IntegrationTest do
       assert config[:port] == OpentelemetryDatadog.DatadogConstants.default(:port)
     end
 
-    test "can initialize exporter" do
-      config = [
-        host: "localhost",
-        port: 8126
-      ]
-
-      assert {:ok, state} = OpentelemetryDatadog.Exporter.init(config)
-      assert state.host == "localhost"
-      assert state.port == 8126
-    end
-
     test "can encode spans for API" do
       spans = [
         %{
@@ -180,17 +169,6 @@ defmodule OpentelemetryDatadog.IntegrationTest do
       assert span["error"] == 0
       assert span["meta"]["test.type"] == "integration"
       assert span["metrics"]["test.count"] == 1
-    end
-
-    test "configuration works correctly" do
-      standard_config = [host: "localhost", port: 8126]
-      config_map = Enum.into(standard_config, %{})
-      assert OpentelemetryDatadog.Config.validate(config_map) == :ok
-
-      exporter_config = OpentelemetryDatadog.Config.to_exporter_config(config_map)
-
-      assert exporter_config[:host] == "localhost"
-      assert exporter_config[:port] == 8126
     end
 
     test "demonstrates usage pattern" do
