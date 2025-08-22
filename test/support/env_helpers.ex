@@ -15,12 +15,6 @@ defmodule OpentelemetryDatadog.EnvHelpers do
     Enum.each(env_vars(), &System.delete_env/1)
   end
 
-  @doc "Sets multiple environment variables from a map."
-  @spec put_env(map()) :: :ok
-  def put_env(vars) when is_map(vars) do
-    Enum.each(vars, fn {k, v} -> System.put_env(k, v) end)
-  end
-
   @doc "Sets a single DD_* environment variable with validation."
   @spec put_dd_env(String.t(), String.t()) :: :ok | {:error, :unknown_variable}
   def put_dd_env(var, value) when is_binary(var) and is_binary(value) do
@@ -67,7 +61,7 @@ defmodule OpentelemetryDatadog.EnvHelpers do
       :ok
       iex> has_minimal_config?()
       false
-      iex> put_env(%{"DD_AGENT_HOST" => "localhost"})
+      iex> System.put_env(%{"DD_AGENT_HOST" => "localhost"})
       :ok
       iex> has_minimal_config?()
       true
@@ -86,7 +80,7 @@ defmodule OpentelemetryDatadog.EnvHelpers do
       :ok
       iex> current_dd_vars()
       []
-      iex> put_env(%{"DD_AGENT_HOST" => "localhost", "DD_SERVICE" => "test"})
+      iex> System.put_env(%{"DD_AGENT_HOST" => "localhost", "DD_SERVICE" => "test"})
       :ok
       iex> current_dd_vars()
       ["DD_AGENT_HOST", "DD_SERVICE"]

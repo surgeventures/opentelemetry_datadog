@@ -3,12 +3,10 @@ defmodule OpentelemetryDatadog.ErrorScenarios do
   Error testing utilities for Datadog configuration validation.
   """
 
-  alias OpentelemetryDatadog.EnvHelpers
-
   @doc "Sets up configuration with invalid port number."
   @spec invalid_port_config() :: :ok
   def invalid_port_config do
-    EnvHelpers.put_env(%{
+    System.put_env(%{
       "DD_AGENT_HOST" => "localhost",
       "DD_TRACE_AGENT_PORT" => "invalid"
     })
@@ -17,7 +15,7 @@ defmodule OpentelemetryDatadog.ErrorScenarios do
   @doc "Sets up configuration with invalid sample rate."
   @spec invalid_sample_rate_config() :: :ok
   def invalid_sample_rate_config do
-    EnvHelpers.put_env(%{
+    System.put_env(%{
       "DD_AGENT_HOST" => "localhost",
       "DD_TRACE_SAMPLE_RATE" => "1.5"
     })
@@ -26,7 +24,7 @@ defmodule OpentelemetryDatadog.ErrorScenarios do
   @doc "Sets up configuration with port number out of valid range."
   @spec port_out_of_range_config() :: :ok
   def port_out_of_range_config do
-    EnvHelpers.put_env(%{
+    System.put_env(%{
       "DD_AGENT_HOST" => "localhost",
       "DD_TRACE_AGENT_PORT" => "99999"
     })
@@ -46,7 +44,7 @@ defmodule OpentelemetryDatadog.ErrorScenarios do
   """
   @spec malformed_tags_config() :: :ok
   def malformed_tags_config do
-    EnvHelpers.put_env(%{
+    System.put_env(%{
       "DD_AGENT_HOST" => "localhost",
       "DD_TAGS" => "key1:value1,key2:value2:extra"
     })
@@ -59,7 +57,7 @@ defmodule OpentelemetryDatadog.ErrorScenarios do
   """
   @spec missing_required_host_config() :: :ok
   def missing_required_host_config do
-    EnvHelpers.put_env(%{
+    System.put_env(%{
       "DD_SERVICE" => "test-service",
       "DD_ENV" => "test"
     })

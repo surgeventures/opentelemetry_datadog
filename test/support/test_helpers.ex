@@ -41,7 +41,7 @@ defmodule OpentelemetryDatadog.TestHelpers do
 
   defdelegate env_vars(), to: OpentelemetryDatadog.EnvHelpers
   defdelegate reset_env(), to: OpentelemetryDatadog.EnvHelpers
-  defdelegate put_env(vars), to: OpentelemetryDatadog.EnvHelpers
+  defdelegate put_env(vars), to: System
   defdelegate get_env_state(), to: OpentelemetryDatadog.EnvHelpers
   defdelegate restore_env_state(state), to: OpentelemetryDatadog.EnvHelpers
   defdelegate put_dd_env(var, value), to: OpentelemetryDatadog.EnvHelpers

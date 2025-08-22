@@ -3,18 +3,16 @@ defmodule OpentelemetryDatadog.ConfigPresets do
   Pre-configured environment setups for common scenarios.
   """
 
-  alias OpentelemetryDatadog.EnvHelpers
-
   @doc "Sets up minimal configuration (only DD_AGENT_HOST)."
   @spec minimal_config(String.t()) :: :ok
   def minimal_config(host \\ "localhost") do
-    EnvHelpers.put_env(%{"DD_AGENT_HOST" => host})
+    System.put_env(%{"DD_AGENT_HOST" => host})
   end
 
   @doc "Sets up development environment configuration."
   @spec dev_config(String.t()) :: :ok
   def dev_config(service \\ "test-app") do
-    EnvHelpers.put_env(%{
+    System.put_env(%{
       "DD_AGENT_HOST" => "localhost",
       "DD_SERVICE" => service,
       "DD_ENV" => "development"
@@ -24,7 +22,7 @@ defmodule OpentelemetryDatadog.ConfigPresets do
   @doc "Sets up production environment configuration."
   @spec prod_config(String.t(), String.t()) :: :ok
   def prod_config(service \\ "api-service", version \\ "v1.0.0") do
-    EnvHelpers.put_env(%{
+    System.put_env(%{
       "DD_AGENT_HOST" => "datadog-agent.kube-system.svc.cluster.local",
       "DD_TRACE_AGENT_PORT" => "8126",
       "DD_SERVICE" => service,
@@ -52,7 +50,7 @@ defmodule OpentelemetryDatadog.ConfigPresets do
   """
   @spec containerized_config(String.t(), String.t(), String.t()) :: :ok
   def containerized_config(service \\ "api-service", version \\ "1.0.0", env \\ "production") do
-    EnvHelpers.put_env(%{
+    System.put_env(%{
       "DD_AGENT_HOST" => "dd-agent",
       "DD_TRACE_AGENT_PORT" => "8126",
       "DD_SERVICE" => service,
@@ -80,7 +78,7 @@ defmodule OpentelemetryDatadog.ConfigPresets do
   """
   @spec phoenix_config(String.t()) :: :ok
   def phoenix_config(service \\ "phoenix-app") do
-    EnvHelpers.put_env(%{
+    System.put_env(%{
       "DD_AGENT_HOST" => "localhost",
       "DD_SERVICE" => service,
       "DD_ENV" => "development",
@@ -100,7 +98,7 @@ defmodule OpentelemetryDatadog.ConfigPresets do
   """
   @spec staging_config(String.t(), String.t()) :: :ok
   def staging_config(service \\ "staging-app", version \\ "latest") do
-    EnvHelpers.put_env(%{
+    System.put_env(%{
       "DD_AGENT_HOST" => "datadog-agent.staging.svc.cluster.local",
       "DD_SERVICE" => service,
       "DD_VERSION" => version,
@@ -122,7 +120,7 @@ defmodule OpentelemetryDatadog.ConfigPresets do
   """
   @spec ci_config(String.t()) :: :ok
   def ci_config(service \\ "ci-test") do
-    EnvHelpers.put_env(%{
+    System.put_env(%{
       "DD_AGENT_HOST" => "localhost",
       "DD_SERVICE" => service,
       "DD_ENV" => "test",
@@ -143,7 +141,7 @@ defmodule OpentelemetryDatadog.ConfigPresets do
   """
   @spec microservice_config(String.t(), String.t()) :: :ok
   def microservice_config(service, component) do
-    EnvHelpers.put_env(%{
+    System.put_env(%{
       "DD_AGENT_HOST" => "datadog-agent.istio-system.svc.cluster.local",
       "DD_SERVICE" => service,
       "DD_ENV" => "production",
