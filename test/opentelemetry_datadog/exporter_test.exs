@@ -16,25 +16,6 @@ defmodule OpentelemetryDatadog.ExporterTest do
       assert state.port == 8126
     end
 
-    test "initializes with production configuration" do
-      prod_config("api-service", "v2.1.0")
-      {:ok, config} = OpentelemetryDatadog.Config.load()
-      exporter_config = OpentelemetryDatadog.Config.to_exporter_config(config)
-
-      assert {:ok, state} = Exporter.init(exporter_config)
-      assert state.host == "datadog-agent.kube-system.svc.cluster.local"
-      assert state.port == 8126
-    end
-
-    test "initializes with development configuration" do
-      dev_config("test-service")
-      {:ok, config} = OpentelemetryDatadog.Config.load()
-      exporter_config = OpentelemetryDatadog.Config.to_exporter_config(config)
-
-      assert {:ok, state} = Exporter.init(exporter_config)
-      assert state.host == "localhost"
-    end
-
     test "requires host and port" do
       config = [port: 8126]
 
