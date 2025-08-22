@@ -40,8 +40,7 @@ defmodule OpentelemetryDatadog.Formatter do
   """
   @spec format_span(span_record(), tuple(), map()) :: DatadogSpan.t()
   def format_span(span_record, resource, state) when is_tuple(resource) do
-    data = build_resource_data(resource)
-    format_span(span_record, data, state)
+    format_span(span_record, build_resource_data(resource), state)
   end
 
   @spec format_span(span_record(), span_data(), map()) :: DatadogSpan.t()
