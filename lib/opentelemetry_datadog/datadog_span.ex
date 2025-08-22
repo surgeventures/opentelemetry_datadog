@@ -28,12 +28,12 @@ defmodule OpentelemetryDatadog.DatadogSpan do
     :name,
     :start,
     :duration,
-    # 0 if no error, 1 if error
-    :error,
     :resource,
-    :service,
-    :type,
-    :meta,
-    :metrics
+    # Default values must come at the end
+    error: 0,
+    service: "unknown-service",
+    type: "custom",
+    meta: %{},
+    metrics: %{}
   ]
 end

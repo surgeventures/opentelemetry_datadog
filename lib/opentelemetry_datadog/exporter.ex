@@ -66,12 +66,10 @@ defmodule OpentelemetryDatadog.Exporter do
       [:opentelemetry_datadog, :export],
       start_metadata,
       fn ->
-        data = Formatter.build_resource_data(resource)
-
         formatted =
           :ets.foldl(
             fn span, acc ->
-              case format_span(span, data, state) do
+              case format_span(span, resource, state) do
                 [] ->
                   Logger.warning("Span skipped: #{inspect(span)}")
                   acc
@@ -160,31 +158,8 @@ defmodule OpentelemetryDatadog.Exporter do
 
   def format_span(span_record, data, state) do
     dd_span = Formatter.format_span(span_record, data, state)
-
     span = apply_mappers(dd_span, Formatter.get_span(span_record), data)
-
-    case span do
-      nil ->
-        []
-
-      span ->
-        span_map = %{
-          trace_id: span.trace_id,
-          span_id: span.span_id,
-          parent_id: span.parent_id,
-          name: span.name,
-          service: span.service || "unknown-service",
-          resource: span.resource || span.name,
-          type: span.type || "custom",
-          start: span.start,
-          duration: span.duration,
-          error: span.error || 0,
-          meta: span.meta || %{},
-          metrics: span.metrics || %{}
-        }
-
-        span_map
-    end
+    span || []
   end
 
   def apply_mappers(span, otel_span, state) do

@@ -38,8 +38,14 @@ defmodule OpentelemetryDatadog.Formatter do
   - Service, environment, resource, and type inference
   - Metadata processing
   """
+  @spec format_span(span_record(), tuple(), map()) :: DatadogSpan.t()
+  def format_span(span_record, resource, state) when is_tuple(resource) do
+    data = build_resource_data(resource)
+    format_span(span_record, data, state)
+  end
+
   @spec format_span(span_record(), span_data(), map()) :: DatadogSpan.t()
-  def format_span(span_record, data, _state) do
+  def format_span(span_record, data, _state) when is_map(data) do
     span = span(span_record)
     attributes_record = Keyword.fetch!(span, :attributes)
     attributes_data = attributes(attributes_record)
@@ -81,7 +87,7 @@ defmodule OpentelemetryDatadog.Formatter do
       parent_id: Span.nil_if_undefined(Keyword.fetch!(span, :parent_span_id)),
       name: name,
       service: service,
-      resource: resource,
+      resource: resource || name,
       type: type,
       start: start_time_nanos,
       duration: end_time_nanos - start_time_nanos,
