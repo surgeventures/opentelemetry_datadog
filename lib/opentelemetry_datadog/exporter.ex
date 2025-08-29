@@ -157,7 +157,12 @@ defmodule OpentelemetryDatadog.Exporter do
         timeout_ms: timeout_ms,
         connect_timeout_ms: connect_timeout_ms
       }) do
-    url = "http://#{host}:#{port}/v0.5/traces"
+    url =
+      if String.starts_with?(host, ["http://", "https://"]) do
+        "#{host}:#{port}/v0.5/traces"
+      else
+        "https://#{host}:#{port}/v0.5/traces"
+      end
 
     Req.put(
       url,
