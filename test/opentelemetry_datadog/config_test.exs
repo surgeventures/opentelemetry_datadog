@@ -1,11 +1,13 @@
 defmodule OpentelemetryDatadog.ConfigTest do
   use ExUnit.Case, async: false
+
+  import OpentelemetryDatadog.TestHelpers
+
+  alias OpentelemetryDatadog.{Config, ConfigError}
+
   @moduletag :unit
 
   doctest OpentelemetryDatadog.Config
-
-  alias OpentelemetryDatadog.{Config, ConfigError}
-  import OpentelemetryDatadog.TestHelpers
 
   setup do
     reset_env()
@@ -33,6 +35,8 @@ defmodule OpentelemetryDatadog.ConfigTest do
       assert is_nil(config.env)
       assert is_nil(config.tags)
       assert is_nil(config.sample_rate)
+      assert config.timeout_ms == 2000
+      assert config.connect_timeout_ms == 500
     end
 
     test "loads custom port" do
@@ -96,6 +100,62 @@ defmodule OpentelemetryDatadog.ConfigTest do
 
       assert {:error, :invalid_config, message} = Config.load()
       assert message =~ "DD_TRACE_SAMPLE_RATE must be a float between 0.0 and 1.0"
+    end
+
+    test "loads custom timeout" do
+      put_env(%{"DD_AGENT_HOST" => "localhost", "DD_EXPORT_TIMEOUT_MS" => "5000"})
+
+      assert {:ok, config} = Config.load()
+      assert config.timeout_ms == 5000
+    end
+
+    test "returns error for invalid timeout" do
+      put_env(%{"DD_AGENT_HOST" => "localhost", "DD_EXPORT_TIMEOUT_MS" => "invalid"})
+
+      assert {:error, :invalid_config, message} = Config.load()
+      assert message =~ "DD_EXPORT_TIMEOUT_MS must be a valid integer"
+    end
+
+    test "returns error for negative timeout" do
+      put_env(%{"DD_AGENT_HOST" => "localhost", "DD_EXPORT_TIMEOUT_MS" => "-1000"})
+
+      assert {:error, :invalid_config, message} = Config.load()
+      assert message =~ "DD_EXPORT_TIMEOUT_MS must be a positive integer"
+    end
+
+    test "returns error for zero timeout" do
+      put_env(%{"DD_AGENT_HOST" => "localhost", "DD_EXPORT_TIMEOUT_MS" => "0"})
+
+      assert {:error, :invalid_config, message} = Config.load()
+      assert message =~ "DD_EXPORT_TIMEOUT_MS must be a positive integer"
+    end
+
+    test "loads custom connect timeout" do
+      put_env(%{"DD_AGENT_HOST" => "localhost", "DD_EXPORT_CONNECT_TIMEOUT_MS" => "1000"})
+
+      assert {:ok, config} = Config.load()
+      assert config.connect_timeout_ms == 1000
+    end
+
+    test "returns error for invalid connect timeout" do
+      invalid_connect_timeout_config()
+
+      assert {:error, :invalid_config, message} = Config.load()
+      assert message =~ "DD_EXPORT_CONNECT_TIMEOUT_MS must be a valid integer"
+    end
+
+    test "returns error for negative connect timeout" do
+      negative_connect_timeout_config()
+
+      assert {:error, :invalid_config, message} = Config.load()
+      assert message =~ "DD_EXPORT_CONNECT_TIMEOUT_MS must be a positive integer"
+    end
+
+    test "returns error for zero connect timeout" do
+      zero_connect_timeout_config()
+
+      assert {:error, :invalid_config, message} = Config.load()
+      assert message =~ "DD_EXPORT_CONNECT_TIMEOUT_MS must be a positive integer"
     end
 
     @tag_test_cases [
@@ -178,7 +238,15 @@ defmodule OpentelemetryDatadog.ConfigTest do
       {%{host: "localhost", port: 8126, sample_rate: -0.1}, :invalid_config,
        "sample_rate must be a float between 0.0 and 1.0"},
       {%{host: "localhost", port: 8126, sample_rate: 1.1}, :invalid_config,
-       "sample_rate must be a float between 0.0 and 1.0"}
+       "sample_rate must be a float between 0.0 and 1.0"},
+      {%{host: "localhost", port: 8126, timeout_ms: 0}, :invalid_config,
+       "timeout_ms must be a positive integer"},
+      {%{host: "localhost", port: 8126, timeout_ms: -1000}, :invalid_config,
+       "timeout_ms must be a positive integer"},
+      {%{host: "localhost", port: 8126, connect_timeout_ms: 0}, :invalid_config,
+       "connect_timeout_ms must be a positive integer"},
+      {%{host: "localhost", port: 8126, connect_timeout_ms: -500}, :invalid_config,
+       "connect_timeout_ms must be a positive integer"}
     ]
 
     for {config, expected_type, expected_message_part} <- @validation_error_cases do
@@ -200,7 +268,9 @@ defmodule OpentelemetryDatadog.ConfigTest do
         version: nil,
         env: nil,
         tags: nil,
-        sample_rate: nil
+        sample_rate: nil,
+        timeout_ms: 2000,
+        connect_timeout_ms: 500
       }
 
       assert :ok = Config.validate(config)
@@ -235,7 +305,9 @@ defmodule OpentelemetryDatadog.ConfigTest do
         version: "1.0.0",
         env: nil,
         tags: %{"team" => "backend"},
-        sample_rate: 0.5
+        sample_rate: 0.5,
+        timeout_ms: 3000,
+        connect_timeout_ms: 1000
       }
 
       result = Config.to_exporter_config(config)
@@ -247,6 +319,8 @@ defmodule OpentelemetryDatadog.ConfigTest do
       assert result[:version] == "1.0.0"
       assert result[:tags] == %{"team" => "backend"}
       assert result[:sample_rate] == 0.5
+      assert result[:timeout_ms] == 3000
+      assert result[:connect_timeout_ms] == 1000
       refute Keyword.has_key?(result, :env)
     end
 
@@ -277,6 +351,8 @@ defmodule OpentelemetryDatadog.ConfigTest do
       assert {:ok, %Config{} = config} = Config.load()
       assert config.host == "localhost"
       assert config.port == 8126
+      assert config.timeout_ms == 2000
+      assert config.connect_timeout_ms == 500
     end
 
     test "struct pattern matching works" do
@@ -304,11 +380,15 @@ defmodule OpentelemetryDatadog.ConfigTest do
         version: nil,
         env: nil,
         tags: nil,
-        sample_rate: nil
+        sample_rate: nil,
+        timeout_ms: 1500,
+        connect_timeout_ms: 750
       }
 
       assert config.host == "test-host"
       assert config.port == 8126
+      assert config.timeout_ms == 1500
+      assert config.connect_timeout_ms == 750
       assert config.__struct__ == Config
     end
   end

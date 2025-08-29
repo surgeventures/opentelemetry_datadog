@@ -26,6 +26,8 @@ export DD_SERVICE=my-service
 export DD_ENV=production
 export DD_TAGS="team:platform,env:prod"
 export DD_TRACE_SAMPLE_RATE=0.25
+export DD_EXPORT_TIMEOUT_MS=5000
+export DD_EXPORT_CONNECT_TIMEOUT_MS=1000
 ```
 
 Configuration is loaded automatically when the exporter initializes. 
@@ -37,15 +39,17 @@ You can validate configuration manually if needed:
 :ok = OpentelemetryDatadog.Config.validate(config)
 ```
 
-| Variable               | Required | Default | Description |
-|------------------------|----------|---------|-------------|
-| `DD_AGENT_HOST`        | yes      | -       | Agent hostname |
-| `DD_TRACE_AGENT_PORT`  | no       | 8126    | Agent port |
-| `DD_SERVICE`           | no       | -       | Service name |
-| `DD_VERSION`           | no       | -       | App version |
-| `DD_ENV`               | no       | -       | Environment |
-| `DD_TAGS`              | no       | -       | Tags (comma-separated) |
-| `DD_TRACE_SAMPLE_RATE` | no       | -       | Sample rate (0.0-1.0) |
+| Variable                      | Required | Default | Description |
+|-------------------------------|----------|---------|-------------|
+| `DD_AGENT_HOST`               | yes      | -       | Agent hostname |
+| `DD_TRACE_AGENT_PORT`         | no       | 8126    | Agent port |
+| `DD_SERVICE`                  | no       | -       | Service name |
+| `DD_VERSION`                  | no       | -       | App version |
+| `DD_ENV`                      | no       | -       | Environment |
+| `DD_TAGS`                     | no       | -       | Tags (comma-separated) |
+| `DD_TRACE_SAMPLE_RATE`        | no       | -       | Sample rate (0.0-1.0) |
+| `DD_EXPORT_TIMEOUT_MS`        | no       | 2000    | HTTP request timeout in milliseconds |
+| `DD_EXPORT_CONNECT_TIMEOUT_MS`| no       | 500     | Connection timeout in milliseconds |
 
 ### Manual Configuration
 

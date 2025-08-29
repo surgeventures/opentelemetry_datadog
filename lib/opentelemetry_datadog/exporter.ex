@@ -35,7 +35,10 @@ defmodule OpentelemetryDatadog.Exporter do
       :host,
       :port,
       :service_name,
-      :container_id
+      :container_id,
+      :timeout_ms,
+      :connect_timeout_ms,
+      :protocol
     ]
   end
 
@@ -51,7 +54,10 @@ defmodule OpentelemetryDatadog.Exporter do
     state = %State{
       host: Keyword.fetch!(config, :host),
       port: Keyword.fetch!(config, :port),
-      container_id: Span.get_container_id()
+      container_id: Span.get_container_id(),
+      timeout_ms: Keyword.get(config, :timeout_ms, 2000),
+      connect_timeout_ms: Keyword.get(config, :connect_timeout_ms, 500),
+      protocol: Keyword.get(config, :protocol, :v05)
     }
 
     {:ok, state}
@@ -145,14 +151,28 @@ defmodule OpentelemetryDatadog.Exporter do
     end
   end
 
-  def push(body, headers, %State{host: host, port: port}) do
+  def push(body, headers, %State{
+        host: host,
+        port: port,
+        timeout_ms: timeout_ms,
+        connect_timeout_ms: connect_timeout_ms
+      }) do
+    url =
+      if String.starts_with?(host, ["http://", "https://"]) do
+        "#{host}:#{port}/v0.5/traces"
+      else
+        "https://#{host}:#{port}/v0.5/traces"
+      end
+
     Req.put(
-      "#{host}:#{port}/v0.5/traces",
+      url,
       body: body,
       headers: headers,
       retry: :transient,
       retry_delay: &retry_delay/1,
-      retry_log_level: false
+      retry_log_level: false,
+      receive_timeout: timeout_ms,
+      connect_options: [timeout: connect_timeout_ms]
     )
   end
 

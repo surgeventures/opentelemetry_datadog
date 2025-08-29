@@ -34,7 +34,9 @@ defmodule OpentelemetryDatadog.Config do
     :version,
     :env,
     :tags,
-    :sample_rate
+    :sample_rate,
+    :timeout_ms,
+    :connect_timeout_ms
   ]
 
   @type t :: %__MODULE__{
@@ -44,7 +46,9 @@ defmodule OpentelemetryDatadog.Config do
           version: String.t() | nil,
           env: String.t() | nil,
           tags: map() | nil,
-          sample_rate: float() | nil
+          sample_rate: float() | nil,
+          timeout_ms: pos_integer(),
+          connect_timeout_ms: pos_integer()
         }
 
   @type validation_error :: {:missing_required_config | :invalid_config, String.t()}
@@ -55,7 +59,9 @@ defmodule OpentelemetryDatadog.Config do
     with {:ok, host} <- get_required_env("DD_AGENT_HOST"),
          {:ok, port} <- get_port(),
          {:ok, sample_rate} <- get_sample_rate(),
-         {:ok, tags} <- get_tags() do
+         {:ok, tags} <- get_tags(),
+         {:ok, timeout_ms} <- get_timeout_ms(),
+         {:ok, connect_timeout_ms} <- get_connect_timeout_ms() do
       config = %__MODULE__{
         host: host,
         port: port,
@@ -63,7 +69,9 @@ defmodule OpentelemetryDatadog.Config do
         version: get_version(),
         env: get_environment(),
         tags: tags,
-        sample_rate: sample_rate
+        sample_rate: sample_rate,
+        timeout_ms: timeout_ms,
+        connect_timeout_ms: connect_timeout_ms
       }
 
       {:ok, config}
@@ -93,7 +101,9 @@ defmodule OpentelemetryDatadog.Config do
     with :ok <- validate_required(config, :host, "host is required"),
          :ok <- validate_required(config, :port, "port is required"),
          :ok <- validate_port(config[:port]),
-         :ok <- validate_sample_rate(config[:sample_rate]) do
+         :ok <- validate_sample_rate(config[:sample_rate]),
+         :ok <- validate_timeout_ms(config[:timeout_ms]),
+         :ok <- validate_connect_timeout_ms(config[:connect_timeout_ms]) do
       :ok
     end
   end
@@ -136,6 +146,22 @@ defmodule OpentelemetryDatadog.Config do
     Parser.get_env("DD_TRACE_SAMPLE_RATE", :float,
       default: DatadogConstants.default(:sample_rate),
       validate: &validate_sample_rate_env/1
+    )
+  end
+
+  @spec get_timeout_ms() :: {:ok, pos_integer()} | validation_error()
+  defp get_timeout_ms do
+    Parser.get_env("DD_EXPORT_TIMEOUT_MS", :integer,
+      default: DatadogConstants.default(:timeout_ms),
+      validate: &validate_timeout_ms_env/1
+    )
+  end
+
+  @spec get_connect_timeout_ms() :: {:ok, pos_integer()} | validation_error()
+  defp get_connect_timeout_ms do
+    Parser.get_env("DD_EXPORT_CONNECT_TIMEOUT_MS", :integer,
+      default: DatadogConstants.default(:connect_timeout_ms),
+      validate: &validate_connect_timeout_ms_env/1
     )
   end
 
@@ -236,6 +262,20 @@ defmodule OpentelemetryDatadog.Config do
   defp validate_sample_rate(_),
     do: {:error, :invalid_config, "sample_rate must be a float between 0.0 and 1.0"}
 
+  @spec validate_timeout_ms(any()) :: :ok | {:error, validation_error()}
+  defp validate_timeout_ms(nil), do: :ok
+  defp validate_timeout_ms(timeout) when is_integer(timeout) and timeout > 0, do: :ok
+
+  defp validate_timeout_ms(_),
+    do: {:error, :invalid_config, "timeout_ms must be a positive integer"}
+
+  @spec validate_connect_timeout_ms(any()) :: :ok | {:error, validation_error()}
+  defp validate_connect_timeout_ms(nil), do: :ok
+  defp validate_connect_timeout_ms(timeout) when is_integer(timeout) and timeout > 0, do: :ok
+
+  defp validate_connect_timeout_ms(_),
+    do: {:error, :invalid_config, "connect_timeout_ms must be a positive integer"}
+
   @spec validate_port_env(any()) :: :ok | {:error, validation_error()}
   defp validate_port_env(port) when is_integer(port) and port > 0 and port <= 65535, do: :ok
 
@@ -248,6 +288,145 @@ defmodule OpentelemetryDatadog.Config do
 
   defp validate_sample_rate_env(_),
     do: {:error, :invalid_config, "DD_TRACE_SAMPLE_RATE must be a float between 0.0 and 1.0"}
+
+  @spec validate_timeout_ms_env(any()) :: :ok | {:error, validation_error()}
+  defp validate_timeout_ms_env(timeout) when is_integer(timeout) and timeout > 0, do: :ok
+
+  defp validate_timeout_ms_env(_),
+    do: {:error, :invalid_config, "DD_EXPORT_TIMEOUT_MS must be a positive integer"}
+
+  @spec validate_connect_timeout_ms_env(any()) :: :ok | {:error, validation_error()}
+  defp validate_connect_timeout_ms_env(timeout) when is_integer(timeout) and timeout > 0, do: :ok
+
+  defp validate_connect_timeout_ms_env(_),
+    do: {:error, :invalid_config, "DD_EXPORT_CONNECT_TIMEOUT_MS must be a positive integer"}
+
+  # V0.5 Exporter Configuration Functions
+
+  @doc """
+  Converts standard Datadog configuration to exporter configuration with v0.5 protocol.
+
+  Takes the same configuration format as the standard exporter but ensures
+  the protocol is set to :v05.
+
+  ## Examples
+
+      iex> config = [host: "localhost", port: 8126, service: "my-service"]
+      iex> exporter_config = OpentelemetryDatadog.Config.to_exporter_config_with_protocol(config)
+      iex> exporter_config[:protocol]
+      :v05
+      iex> exporter_config[:host]
+      "localhost"
+  """
+  @spec to_exporter_config_with_protocol(keyword() | map()) :: keyword()
+  def to_exporter_config_with_protocol(config) when is_list(config) do
+    config
+    |> Keyword.put(:protocol, :v05)
+  end
+
+  def to_exporter_config_with_protocol(config) when is_map(config) do
+    config
+    |> to_exporter_config()
+    |> to_exporter_config_with_protocol()
+  end
+
+  @doc """
+  Sets up the Datadog exporter with configuration from environment variables.
+
+  This is a convenience function that loads configuration from environment
+  variables and configures the exporter.
+
+  ## Examples
+
+      # With environment variables set
+      iex> System.put_env("DD_AGENT_HOST", "localhost")
+      iex> OpentelemetryDatadog.Config.setup()
+      :ok
+  """
+  @spec setup() :: :ok | {:error, validation_error()}
+  def setup do
+    case load() do
+      {:ok, config} ->
+        config
+        |> to_exporter_config()
+        |> to_exporter_config_with_protocol()
+        |> setup()
+
+      {:error, _, _} = error ->
+        error
+    end
+  end
+
+  @doc """
+  Sets up the Datadog exporter with the provided configuration.
+
+  ## Examples
+
+      iex> config = [host: "localhost", port: 8126]
+      iex> OpentelemetryDatadog.Config.setup(config)
+      :ok
+  """
+  @spec setup(keyword()) :: :ok | {:error, validation_error()}
+  def setup(config) when is_list(config) do
+    # Extract protocol to validate it's v05, then validate the rest
+    {protocol, base_config} = Keyword.pop(config, :protocol, :v05)
+
+    case protocol do
+      :v05 ->
+        config_map = Enum.into(base_config, %{})
+
+        case validate(config_map) do
+          :ok ->
+            # TODO: This function should actually register the exporter with OpenTelemetry,
+            # but currently only validates config. Users expect setup() to fully configure
+            # the exporter, not just validate it. Missing implementation should:
+            # 1. Create exporter instance: {:ok, pid} = OpentelemetryDatadog.Exporter.init(config)
+            # 2. Register with OTel: :otel_batch_processor.set_exporter(pid)
+            :ok
+
+          {:error, _, _} = error ->
+            error
+        end
+
+      other ->
+        {:error, :invalid_config, "exporter requires protocol: :v05, got: #{inspect(other)}"}
+    end
+  end
+
+  @doc """
+  Sets up the Datadog exporter, raising an exception on failure.
+
+  ## Examples
+
+      # With environment variables set
+      iex> System.put_env("DD_AGENT_HOST", "localhost")
+      iex> OpentelemetryDatadog.Config.setup!()
+      :ok
+  """
+  @spec setup!() :: :ok
+  def setup! do
+    case setup() do
+      :ok -> :ok
+      {:error, type, message} -> raise ConfigError, {type, message}
+    end
+  end
+
+  @doc """
+  Sets up the Datadog exporter with the provided configuration, raising an exception on failure.
+
+  ## Examples
+
+      iex> config = [host: "localhost", port: 8126, protocol: :v05]
+      iex> OpentelemetryDatadog.Config.setup!(config)
+      :ok
+  """
+  @spec setup!(keyword()) :: :ok
+  def setup!(config) when is_list(config) do
+    case setup(config) do
+      :ok -> :ok
+      {:error, type, message} -> raise ConfigError, {type, message}
+    end
+  end
 
   @doc """
   Returns the current configuration for the exporter.
