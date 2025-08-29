@@ -37,6 +37,9 @@ The main component responsible for:
 - Supports the Datadog v0.5 traces API endpoint (`/v0.5/traces`)
 - Implements retry logic with jitter (3 retries with exponential backoff)
 - Provides comprehensive telemetry instrumentation
+- Configurable HTTP timeouts for connection and request handling
+- Intelligent URL construction with protocol detection (HTTP/HTTPS)
+- Graceful error handling with detailed logging and telemetry
 
 #### 2. Configuration Manager (`OpentelemetryDatadog.Config`)
 
@@ -47,13 +50,15 @@ Handles configuration loading and validation:
 - Error handling with detailed error messages
 
 **Supported Environment Variables:**
-- `DD_AGENT_HOST` (required): Datadog Agent hostname
+- `DD_AGENT_HOST` (required): Datadog Agent hostname or full URL
 - `DD_TRACE_AGENT_PORT` (optional, default: 8126): Agent port
 - `DD_SERVICE` (optional): Service name
 - `DD_VERSION` (optional): Application version
 - `DD_ENV` (optional): Environment name
 - `DD_TAGS` (optional): Comma-separated key:value tags
 - `DD_TRACE_SAMPLE_RATE` (optional): Sampling rate (0.0-1.0)
+- `DD_EXPORT_TIMEOUT_MS` (optional, default: 2000): HTTP request timeout in milliseconds
+- `DD_EXPORT_CONNECT_TIMEOUT_MS` (optional, default: 500): HTTP connection timeout in milliseconds
 
 #### 3. Span Mapper (`OpentelemetryDatadog.Mapper`)
 
@@ -182,16 +187,37 @@ Configuration Struct
 
 - **Attempts**: 3 retries maximum
 - **Backoff**: Exponential with jitter (10% randomization)
-- **Delays**: ~484ms, ~945ms, ~1908ms
+- **Delays**: ~484ms, ~945ms, ~1908ms (calculated as `2^attempt * 500ms * (1 - 0.1 * random)`)
 - **Conditions**: Transient HTTP errors and network failures
+- **Implementation**: Uses Req library's `:transient` retry with custom delay function
 
 ### Error Categories
 
 1. **Configuration Errors**: Missing required environment variables
 2. **Validation Errors**: Invalid span data or configuration values
-3. **Network Errors**: Connection failures, timeouts
-4. **HTTP Errors**: 4xx/5xx responses from Datadog Agent
+3. **Network Errors**: Connection failures, timeouts (marked as retryable)
+4. **HTTP Errors**: 4xx/5xx responses from Datadog Agent (marked as non-retryable)
 5. **Encoding Errors**: MessagePack serialization failures
+
+### Timeout Configuration
+
+The exporter supports two types of configurable timeouts:
+
+- **Connection Timeout** (`DD_EXPORT_CONNECT_TIMEOUT_MS`): Time to establish connection (default: 500ms)
+- **Request Timeout** (`DD_EXPORT_TIMEOUT_MS`): Total time for request completion (default: 2000ms)
+
+Both timeouts are applied to HTTP requests to prevent hanging connections and ensure responsive error handling.
+
+### URL Construction and Protocol Detection
+
+The exporter intelligently constructs URLs based on the `DD_AGENT_HOST` configuration:
+
+- **Full URL Format**: If `DD_AGENT_HOST` contains `http://` or `https://`, it's used as-is
+  - Example: `DD_AGENT_HOST=https://api.datadoghq.com` → `https://api.datadoghq.com:8126/v0.5/traces`
+- **Hostname Format**: If `DD_AGENT_HOST` is a plain hostname, HTTPS is assumed by default
+  - Example: `DD_AGENT_HOST=localhost` → `https://localhost:8126/v0.5/traces`
+
+This approach provides flexibility for both local development (with Datadog Agent) and cloud deployments (with Datadog SaaS).
 
 ### Telemetry Integration
 
@@ -234,6 +260,25 @@ config :opentelemetry,
     OpentelemetryDatadog.Config.to_exporter_config(config)}
 ```
 
+### Configuration with Custom Timeouts
+
+```elixir
+# Environment variables for timeout configuration
+export DD_AGENT_HOST="https://api.datadoghq.com"
+export DD_TRACE_AGENT_PORT="443"
+export DD_EXPORT_TIMEOUT_MS="5000"
+export DD_EXPORT_CONNECT_TIMEOUT_MS="1000"
+
+# Or direct configuration
+config :opentelemetry,
+  traces_exporter: {OpentelemetryDatadog.Exporter, [
+    host: "api.datadoghq.com",
+    port: 443,
+    timeout_ms: 5000,
+    connect_timeout_ms: 1000
+  ]}
+```
+
 ### Custom Mappers
 
 ```elixir
@@ -266,6 +311,8 @@ end
 - HTTP/1.1 with connection reuse via Req library
 - Compression headers for reduced bandwidth
 - Configurable retry delays to avoid overwhelming the agent
+- Intelligent URL construction supporting both hostname and full URL formats
+- Configurable connection and request timeouts for optimal performance
 
 ## Security Considerations
 
@@ -297,6 +344,18 @@ Enable debug logging to troubleshoot:
 - Network connectivity problems
 - Configuration validation failures
 
+### Testing and Quality Assurance
+
+The integration includes comprehensive test coverage for resilience features:
+
+- **Retry Logic Testing**: Validates exponential backoff with jitter calculations
+- **Error Handling Testing**: Verifies graceful degradation under network failures
+- **Timeout Testing**: Ensures proper timeout behavior with unreachable hosts
+- **Telemetry Testing**: Validates telemetry event emission during failures
+- **URL Construction Testing**: Tests protocol detection and URL building logic
+
+Test coverage focuses on critical failure scenarios to ensure production reliability.
+
 ### Metrics to Monitor
 
 - Export success rate
@@ -318,6 +377,10 @@ Enable debug logging to troubleshoot:
 - Set required environment variables before application start
 - Validate configuration in deployment scripts
 - Monitor configuration drift in production
+- Configure appropriate timeout values based on network conditions:
+  - Local development: Use default timeouts (500ms connect, 2000ms request)
+  - Cloud deployments: Consider higher timeouts for network latency
+  - High-throughput environments: Monitor timeout effectiveness
 
 ### Scaling Considerations
 
