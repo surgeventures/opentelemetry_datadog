@@ -1,10 +1,12 @@
 # OpentelemetryDatadog
 
-OpenTelemetry DataDog Exporter and utilities for Elixir.
+Datadog exporter for OpenTelemetry in Elixir. Exports traces directly to the Datadog Agent using native Datadog protocol over MessagePack.
 
-The main reason you would use this over exporting over the DataDog Agent over otlp is that this approach supports proper sampling.
+Uses the `/v0.5/traces` endpoint.
 
 ## Installation
+
+Add the dependency to your `mix.exs`:
 
 ```elixir
 def deps do
@@ -14,21 +16,81 @@ def deps do
 end
 ```
 
-After installing, `opentelemetry` needs to be configured with the datadog exporter:
+## Configuration
+
+### Environment Variables
+
+```bash
+export DD_AGENT_HOST=localhost
+export DD_SERVICE=my-service
+export DD_ENV=production
+export DD_TAGS="team:platform,env:prod"
+export DD_TRACE_SAMPLE_RATE=0.25
+```
+
+Configuration is loaded automatically when the exporter initializes. 
+You can validate configuration manually if needed:
+
+```elixir
+# Validate environment configuration
+{:ok, config} = OpentelemetryDatadog.Config.load()
+:ok = OpentelemetryDatadog.Config.validate(config)
+```
+
+| Variable               | Required | Default | Description |
+|------------------------|----------|---------|-------------|
+| `DD_AGENT_HOST`        | yes      | -       | Agent hostname |
+| `DD_TRACE_AGENT_PORT`  | no       | 8126    | Agent port |
+| `DD_SERVICE`           | no       | -       | Service name |
+| `DD_VERSION`           | no       | -       | App version |
+| `DD_ENV`               | no       | -       | Environment |
+| `DD_TAGS`              | no       | -       | Tags (comma-separated) |
+| `DD_TRACE_SAMPLE_RATE` | no       | -       | Sample rate (0.0-1.0) |
+
+### Manual Configuration
+
+You can validate configuration manually:
+
+```elixir
+config = [
+  host: "localhost", 
+  port: 8126,
+  service: "my-app",
+  version: "1.0.0", 
+  env: "staging"
+]
+
+:ok = OpentelemetryDatadog.Config.validate(config)
+```
+
+## OpenTelemetry Setup
 
 ```elixir
 config :opentelemetry,
-  traces_exporter: {OpentelemetryDatadog.Exporter, [host: "http://localhost", port: 8126]},
+  traces_exporter: {OpentelemetryDatadog.Exporter, []},
+  sampler: {:otel_sampler_parent_based, %{root: {:otel_sampler_always_on, %{}}}},
+  text_map_propagators: [OpentelemetryDatadog.Propagator.Datadog],
   resource: %{
-    # Resources configuration go in here or are specified using env variables
-    "service.name": "my-service",
-    "deployment.environment": "production"
-  },
-  sampler: {OpentelemetryDatadog.Sampler.UseLocalSamplingRules, 0.5},
-  text_map_propagators: [OpentelemetryDatadog.Propagator.Datadog]
+    "service.name": "my-app",
+    "deployment.environment": "production",
+    "service.version": "1.2.3"
+  }
 ```
 
-The above config will:
-* Send traces to a DataDog agent running on `localhost:8126`
-* Randomly sample traces at a rate of 0.5, while accurately reporting sampling rates to DataDog
-* Setup a propagator that is compatible with the "x-datadog-*" headers
+## v0.5 API
+
+Required fields: `trace_id`, `span_id`, `parent_id`, `name`, `service`, `resource`, `type`, `start`, `duration`, `error`, `meta`, `metrics`.
+
+## Testing
+
+```bash
+mix test
+```
+
+### Integration Tests
+
+```bash
+MIX_ENV=test mix test --include integration
+```
+
+Integration tests automatically start a Datadog Agent container (requires Docker).
