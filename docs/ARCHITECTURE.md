@@ -19,6 +19,14 @@ The OpenTelemetry Datadog integration provides a native Elixir implementation fo
                        │  DD Propagator   │    │  Configuration  │
                        │                  │    │    Manager      │
                        └──────────────────┘    └─────────────────┘
+                                │
+                                ▼
+                       ┌──────────────────┐
+                       │   DD Samplers    │
+                       │ • Priority       │
+                       │ • Rate Limiter   │
+                       │ • Tail-Based     │
+                       └──────────────────┘
 ```
 
 ### Core Components
@@ -84,7 +92,63 @@ Implements Datadog's trace context propagation:
 - `x-datadog-parent-id`: Parent span identifier  
 - `x-datadog-sampling-priority`: Sampling decision
 
-#### 5. Encoder (`OpentelemetryDatadog.Encoder`)
+#### 5. Samplers
+
+The integration provides several advanced sampling implementations that extend OpenTelemetry's sampling capabilities with Datadog-specific features:
+
+##### Priority Sampler (`OpentelemetryDatadog.Sampler.PrioritySampler`)
+
+Advanced sampler with Datadog priority sampling support:
+
+- **Priority Values**:
+  - `USER_REJECT (-1)`: User explicitly rejects this trace
+  - `AUTO_REJECT (0)`: Automatic rejection (default for dropped traces)
+  - `AUTO_KEEP (1)`: Automatic keep (default for sampled traces)
+  - `USER_KEEP (2)`: User explicitly keeps this trace
+
+- **Features**:
+  - Service-specific sampling rules
+  - Operation-specific sampling rules
+  - Configurable default sampling rate
+  - User priority override support
+
+##### Rate Limiter (`OpentelemetryDatadog.Sampler.RateLimiter`)
+
+Rate limiting sampler that wraps other samplers to prevent overwhelming downstream systems:
+
+- **Algorithm**: Token bucket with configurable burst capacity
+- **Features**:
+  - Configurable traces per second limit
+  - Burst capacity for traffic spikes
+  - Wraps any existing sampler
+  - Automatic rejection when rate limit exceeded
+
+##### Tail-Based Sampler (`OpentelemetryDatadog.Sampler.TailBasedSampler`)
+
+Intelligent sampler that delays decisions until complete trace information is available:
+
+- **Decision Factors**:
+  - Presence of errors in any span
+  - Service names involved in the trace
+  - Total trace duration
+  - Custom policies
+
+- **Policies**:
+  - `:service` - Sample traces containing specific services
+  - `:error` - Sample traces with errors
+  - `:duration` - Sample slow traces (future enhancement)
+
+- **Buffer Management**:
+  - Configurable buffer size and timeout
+  - Fallback probabilistic sampling when buffer is full
+  - Automatic decision for oldest buffered traces
+
+##### Simple Samplers
+
+- **KeepAll**: Always samples traces with `AUTO_KEEP` priority
+- **UseLocalSamplingRules**: Probabilistic sampler with fixed 50% rate using Datadog's sampling algorithm
+
+#### 6. Encoder (`OpentelemetryDatadog.Encoder`)
 
 Serializes span data for transmission:
 - Validates span data structure
@@ -92,7 +156,7 @@ Serializes span data for transmission:
 - Ensures API compatibility with Datadog v0.5 format
 - Handles data type normalization
 
-#### 6. Formatter (`OpentelemetryDatadog.Formatter`)
+#### 7. Formatter (`OpentelemetryDatadog.Formatter`)
 
 Formats OpenTelemetry spans to Datadog span structure:
 - Maps OpenTelemetry fields to Datadog equivalents
@@ -109,6 +173,9 @@ Application Code
        │
        ▼
 OpenTelemetry SDK
+       │
+       ▼
+DD Samplers (Priority/Rate Limiter/Tail-Based)
        │
        ▼ 
 Span Collection (ETS table)
@@ -292,6 +359,52 @@ defmodule MyApp.CustomMapper do
 end
 ```
 
+### Sampler Configuration
+
+#### Priority Sampler with Rules
+
+```elixir
+config :opentelemetry,
+  sampler: {OpentelemetryDatadog.Sampler.PrioritySampler, [
+    default_rate: 0.1,
+    enable_user_priority: true,
+    rules: [
+      %{service: "critical-service", operation: :any, rate: 1.0, priority: 2},
+      %{service: :any, operation: "db.query", rate: 0.5, priority: nil},
+      %{service: "noisy-service", operation: :any, rate: 0.01, priority: -1}
+    ]
+  ]}
+```
+
+#### Rate Limiter with Wrapped Sampler
+
+```elixir
+config :opentelemetry,
+  sampler: {OpentelemetryDatadog.Sampler.RateLimiter, [
+    wrapped_sampler: {OpentelemetryDatadog.Sampler.PrioritySampler, [default_rate: 0.5]},
+    max_traces_per_second: 100,
+    burst_capacity: 150,
+    window_size_ms: 1000
+  ]}
+```
+
+#### Tail-Based Sampler with Policies
+
+```elixir
+config :opentelemetry,
+  sampler: {OpentelemetryDatadog.Sampler.TailBasedSampler, [
+    decision_timeout_ms: 10_000,
+    max_buffered_traces: 1000,
+    sample_errors: true,
+    slow_trace_threshold_ms: 1000,
+    fallback_rate: 0.1,
+    policies: [
+      %{type: :service, service: "critical-service", sample: true, rate: 1.0},
+      %{type: :error, sample: true}
+    ]
+  ]}
+```
+
 ## Performance Considerations
 
 ### Batching Strategy
@@ -305,6 +418,13 @@ end
 - Spans are processed in batches to limit memory usage
 - Failed exports don't accumulate indefinitely due to retry limits
 - ETS tables are managed by OpenTelemetry SDK
+
+### Sampling Performance
+
+- **Priority Sampler**: O(1) decision time with rule-based matching
+- **Rate Limiter**: O(1) token bucket operations with ETS-based state
+- **Tail-Based Sampler**: Configurable buffer size to balance memory vs. decision accuracy
+- **Simple Samplers**: Minimal overhead for basic use cases
 
 ### Network Optimization
 
@@ -363,6 +483,10 @@ Test coverage focuses on critical failure scenarios to ensure production reliabi
 - Retry frequency
 - Span drop rate
 - Agent connectivity status
+- Sampling decision rates by priority
+- Rate limiter token consumption
+- Tail-based sampler buffer utilization
+- Sampling rule effectiveness
 
 ## Deployment Considerations
 
