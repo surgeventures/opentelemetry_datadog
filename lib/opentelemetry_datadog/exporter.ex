@@ -46,21 +46,18 @@ defmodule OpentelemetryDatadog.Exporter do
   alias OpentelemetryDatadog.Utils.Span
 
   @mappers [
-    {Mapper.LiftError, []},
-    {Mapper.InferDatadogFields, []}
+    {Mapper.LiftError, []}
   ]
 
   @impl true
   def init(config) do
-    protocol = Keyword.get(config, :protocol, :v05)
-
     state = %State{
       host: Keyword.fetch!(config, :host),
       port: Keyword.fetch!(config, :port),
       container_id: Span.get_container_id(),
       timeout_ms: Keyword.get(config, :timeout_ms, 2000),
       connect_timeout_ms: Keyword.get(config, :connect_timeout_ms, 500),
-      protocol: protocol
+      protocol: Keyword.get(config, :protocol, :v05)
     }
 
     {:ok, state}
@@ -75,12 +72,10 @@ defmodule OpentelemetryDatadog.Exporter do
       [:opentelemetry_datadog, :export],
       start_metadata,
       fn ->
-        data = Formatter.build_resource_data(resource)
-
         formatted =
           :ets.foldl(
             fn span, acc ->
-              case format_span_v05(span, data, state) do
+              case format_span(span, resource, state) do
                 [] ->
                   Logger.warning("Span skipped: #{inspect(span)}")
                   acc
@@ -98,8 +93,8 @@ defmodule OpentelemetryDatadog.Exporter do
 
         response =
           formatted
-          |> encode_v05()
-          |> push_v05(headers, state)
+          |> encode()
+          |> push(headers, state)
 
         stop_metadata = Map.merge(start_metadata, %{span_count: count})
 
@@ -145,25 +140,24 @@ defmodule OpentelemetryDatadog.Exporter do
     :ok
   end
 
-  def encode_v05(data) do
+  def encode(data) do
     case Encoder.encode(data) do
       {:ok, encoded} ->
         encoded
 
       {:error, error} ->
-        Logger.error("Failed to encode spans for v0.5", error: error)
-        raise "Failed to encode spans for v0.5: #{inspect(error)}"
+        Logger.error("Failed to encode spans", error: error)
+        raise "Failed to encode spans: #{inspect(error)}"
     end
   end
 
-  def push_v05(body, headers, %State{host: host, port: port}) do
-    url =
-      if String.starts_with?(host, ["http://", "https://"]) do
-        "#{host}:#{port}/v0.5/traces"
-      else
-        # Default to http for backward compatibility with local agent
-        "http://#{host}:#{port}/v0.5/traces"
-      end
+  def push(body, headers, %State{
+        host: host,
+        port: port,
+        timeout_ms: timeout_ms,
+        connect_timeout_ms: connect_timeout_ms
+      }) do
+    url = "http://#{host}:#{port}/v0.5/traces"
 
     Req.put(
       url,
@@ -171,50 +165,16 @@ defmodule OpentelemetryDatadog.Exporter do
       headers: headers,
       retry: :transient,
       retry_delay: &retry_delay/1,
-      retry_log_level: false
+      retry_log_level: false,
+      receive_timeout: timeout_ms,
+      connect_options: [timeout: connect_timeout_ms]
     )
   end
 
-  def format_span_v05(span_record, data, state) do
-    processing_state = Formatter.build_processing_state(span_record, data)
-
-    dd_span = Formatter.format_span_base(span_record, data, state)
-
-    dd_span_kind = Atom.to_string(Keyword.fetch!(Formatter.get_span(span_record), :kind))
-
-    dd_span = %{
-      dd_span
-      | meta: Map.put(dd_span.meta, :env, Span.get_env_from_resource(data)),
-        service: Span.get_service_from_resource(data),
-        resource: Span.get_resource_from_span(dd_span.name, dd_span.meta),
-        type: Span.get_type_from_span(dd_span_kind),
-        error: 0
-    }
-
-    span = apply_mappers(dd_span, Formatter.get_span(span_record), processing_state)
-
-    case span do
-      nil ->
-        []
-
-      span ->
-        span_map = %{
-          trace_id: span.trace_id,
-          span_id: span.span_id,
-          parent_id: span.parent_id,
-          name: span.name,
-          service: span.service || "unknown-service",
-          resource: span.resource || span.name,
-          type: span.type || "custom",
-          start: span.start,
-          duration: span.duration,
-          error: span.error || 0,
-          meta: span.meta || %{},
-          metrics: span.metrics || %{}
-        }
-
-        span_map
-    end
+  def format_span(span_record, data, state) do
+    dd_span = Formatter.format_span(span_record, data, state)
+    span = apply_mappers(dd_span, Formatter.get_span(span_record), data)
+    span || []
   end
 
   def apply_mappers(span, otel_span, state) do
@@ -230,8 +190,9 @@ defmodule OpentelemetryDatadog.Exporter do
       {"Content-Type", "application/msgpack"},
       {"Datadog-Meta-Lang", "elixir"},
       {"Datadog-Meta-Lang-Version", System.version()},
-      {"Datadog-Meta-Tracer-Version", Application.spec(:opentelemetry_datadog)[:vsn]},
-      {"X-Datadog-Trace-Count", trace_count}
+      {"Datadog-Meta-Tracer-Version",
+       Application.spec(:opentelemetry_datadog)[:vsn] || "unknown"},
+      {"X-Datadog-Trace-Count", to_string(trace_count)}
     ]
 
     container_headers =
